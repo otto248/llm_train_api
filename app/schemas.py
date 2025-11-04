@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, FieldSerializationInfo, field_serializer
 
 
 def _to_epoch(value: Optional[datetime]) -> Optional[int]:
@@ -33,9 +33,10 @@ class ExperimentSummary(BaseModel):
     version: Optional[str] = None
     owner: Optional[str] = None
     created_at: datetime
+    run_count: int = 0
 
     @field_serializer("created_at", when_used="json")
-    def serialize_created_at(cls, value: datetime) -> int:
+    def serialize_created_at(cls, value: datetime, info: FieldSerializationInfo) -> int:  # noqa: ARG002
         return _to_epoch(value) or 0
 
 
@@ -57,11 +58,12 @@ class ExperimentDetailResponse(BaseModel):
     param_config: Dict[str, Any]
     tags: List[str]
     created_at: datetime
+    run_count: int
     runs: List["RunSummary"]
     history: List["ExperimentEventSchema"]
 
     @field_serializer("created_at", when_used="json")
-    def serialize_created_at(cls, value: datetime) -> int:
+    def serialize_created_at(cls, value: datetime, info: FieldSerializationInfo) -> int:  # noqa: ARG002
         return _to_epoch(value) or 0
 
 
@@ -73,7 +75,7 @@ class ExperimentEventSchema(BaseModel):
     created_at: datetime
 
     @field_serializer("created_at", when_used="json")
-    def serialize_created_at(cls, value: datetime) -> int:
+    def serialize_created_at(cls, value: datetime, info: FieldSerializationInfo) -> int:  # noqa: ARG002
         return _to_epoch(value) or 0
 
 
@@ -98,7 +100,7 @@ class RunResponse(RunSummary):
     started_at: datetime
 
     @field_serializer("started_at", when_used="json")
-    def serialize_started_at(cls, value: datetime) -> int:
+    def serialize_started_at(cls, value: datetime, info: FieldSerializationInfo) -> int:  # noqa: ARG002
         return _to_epoch(value) or 0
 
 
@@ -109,6 +111,24 @@ class RunStatusResponse(BaseModel):
     status: str
     progress: float
     latest_metrics: List[Dict[str, Any]]
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+
+    @field_serializer("started_at", when_used="json")
+    def serialize_started_at(
+        cls,
+        value: Optional[datetime],
+        info: FieldSerializationInfo,  # noqa: ARG002
+    ) -> Optional[int]:
+        return _to_epoch(value)
+
+    @field_serializer("finished_at", when_used="json")
+    def serialize_finished_at(
+        cls,
+        value: Optional[datetime],
+        info: FieldSerializationInfo,  # noqa: ARG002
+    ) -> Optional[int]:
+        return _to_epoch(value)
 
 
 class RunCancelResponse(BaseModel):
@@ -144,5 +164,46 @@ class CheckpointMarkResponse(BaseModel):
     ckpt_path: str
     is_candidate_base: bool
     release_tag: Optional[str] = None
+
+
+class RunLogEntry(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    level: str
+    message: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+    @field_serializer("created_at", when_used="json")
+    def serialize_created_at(cls, value: datetime, info: FieldSerializationInfo) -> int:  # noqa: ARG002
+        return _to_epoch(value) or 0
+
+
+class RunLogResponse(BaseModel):
+    run_id: str
+    items: List[RunLogEntry]
+    total: int
+    limit: int
+    offset: int
+
+
+class RunArtifactSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    artifact_id: int = Field(alias="id")
+    artifact_type: str
+    path: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+    @field_serializer("created_at", when_used="json")
+    def serialize_created_at(cls, value: datetime, info: FieldSerializationInfo) -> int:  # noqa: ARG002
+        return _to_epoch(value) or 0
+
+
+class RunArtifactListResponse(BaseModel):
+    run_id: str
+    items: List[RunArtifactSchema]
+
 
 ExperimentDetailResponse.model_rebuild()

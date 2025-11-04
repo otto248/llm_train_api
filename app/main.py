@@ -1,24 +1,38 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Optional
 
-
-from fastapi import Depends, FastAPI, HTTPException, Request, status
-from sqlalchemy import select
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .database import engine, get_session
-from .models import CheckpointTag, Experiment, ExperimentEvent, IdempotencyKey, Run, Base
+from .models import (
+    Base,
+    CheckpointTag,
+    Experiment,
+    ExperimentEvent,
+    IdempotencyKey,
+    Run,
+    RunArtifact,
+    RunLog,
+)
 from .schemas import (
     CheckpointMarkRequest,
     CheckpointMarkResponse,
     ExperimentCreate,
     ExperimentDetailResponse,
+    ExperimentEventSchema,
     ExperimentResponse,
+    RunArtifactListResponse,
+    RunArtifactSchema,
     RunCancelResponse,
     RunCreate,
+    RunLogEntry,
+    RunLogResponse,
     RunResponse,
     RunResumeRequest,
     RunResumeResponse,
@@ -27,7 +41,7 @@ from .schemas import (
 )
 from .utils import compute_payload_hash, generate_experiment_id, generate_run_id
 
-app = FastAPI(title="LLM Training API", version="1.4")
+app = FastAPI(title="LLM Training API", version="1.5")
 
 
 @app.on_event("startup")
@@ -44,8 +58,17 @@ def _experiment_to_response(experiment: Experiment) -> ExperimentResponse:
         version=experiment.version,
         owner=experiment.owner,
         created_at=experiment.created_at,
+        run_count=len(experiment.runs),
         dashboard_url=f"/v1/experiments/{experiment.id}",
     )
+
+
+def _parse_epoch(ts: Optional[int]) -> Optional[datetime]:
+    if ts is None:
+        return None
+    if ts < 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Timestamp must be positive")
+    return datetime.fromtimestamp(ts, tz=timezone.utc).replace(tzinfo=None)
 
 
 @app.post("/v1/experiments", response_model=ExperimentResponse, status_code=status.HTTP_201_CREATED)
@@ -101,6 +124,12 @@ def create_experiment(
     return _experiment_to_response(experiment)
 
 
+@app.get("/v1/experiments", response_model=list[ExperimentResponse])
+def list_experiments(session: Session = Depends(get_session)) -> list[ExperimentResponse]:
+    experiments = session.scalars(select(Experiment).order_by(Experiment.created_at.desc())).all()
+    return [_experiment_to_response(experiment) for experiment in experiments]
+
+
 @app.get("/v1/experiments/{experiment_id}/detail", response_model=ExperimentDetailResponse)
 def get_experiment_detail(
     experiment_id: str,
@@ -112,12 +141,7 @@ def get_experiment_detail(
 
     runs = [RunSummary.model_validate(run, from_attributes=True) for run in experiment.runs]
     history = [
-        {
-            "event": event.event,
-            "detail": event.detail,
-            "created_at": event.created_at,
-        }
-        for event in experiment.events
+        ExperimentEventSchema.model_validate(event, from_attributes=True) for event in experiment.events
     ]
 
     response = ExperimentDetailResponse(
@@ -132,6 +156,7 @@ def get_experiment_detail(
         param_config=experiment.param_config,
         tags=experiment.tags,
         created_at=experiment.created_at,
+        run_count=len(runs),
         runs=runs,
         history=history,
     )
@@ -197,6 +222,8 @@ def get_run_status(
         status=run.status,
         progress=run.progress,
         latest_metrics=run.latest_metrics or [],
+        started_at=run.started_at,
+        finished_at=run.finished_at,
     )
 
 
@@ -328,6 +355,64 @@ def mark_checkpoint(
         is_candidate_base=is_candidate_base,
         release_tag=payload.release_tag,
     )
+
+
+@app.get("/v1/experiments/{experiment_id}/runs/{run_id}/logs", response_model=RunLogResponse)
+def get_run_logs(
+    experiment_id: str,
+    run_id: str,
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    start_time: Optional[int] = None,
+    end_time: Optional[int] = None,
+    session: Session = Depends(get_session),
+) -> RunLogResponse:
+    run = session.get(Run, run_id)
+    if run is None or run.experiment_id != experiment_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+
+    start_dt = _parse_epoch(start_time)
+    end_dt = _parse_epoch(end_time)
+
+    if start_dt and end_dt and start_dt > end_dt:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start_time must be <= end_time")
+
+    query = select(RunLog).where(RunLog.run_id == run_id)
+    count_query = select(func.count()).where(RunLog.run_id == run_id)
+
+    if start_dt:
+        query = query.where(RunLog.created_at >= start_dt)
+        count_query = count_query.where(RunLog.created_at >= start_dt)
+    if end_dt:
+        query = query.where(RunLog.created_at <= end_dt)
+        count_query = count_query.where(RunLog.created_at <= end_dt)
+
+    total = session.scalar(count_query) or 0
+    logs = session.scalars(query.order_by(RunLog.created_at).offset(offset).limit(limit)).all()
+
+    items = [RunLogEntry.model_validate(log, from_attributes=True) for log in logs]
+    return RunLogResponse(run_id=run.id, items=items, total=total, limit=limit, offset=offset)
+
+
+@app.get(
+    "/v1/experiments/{experiment_id}/runs/{run_id}/artifacts",
+    response_model=RunArtifactListResponse,
+)
+def list_run_artifacts(
+    experiment_id: str,
+    run_id: str,
+    session: Session = Depends(get_session),
+) -> RunArtifactListResponse:
+    run = session.get(Run, run_id)
+    if run is None or run.experiment_id != experiment_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+
+    artifacts = session.scalars(
+        select(RunArtifact).where(RunArtifact.run_id == run_id).order_by(RunArtifact.created_at.desc())
+    ).all()
+
+    items = [RunArtifactSchema.model_validate(artifact, from_attributes=True) for artifact in artifacts]
+    return RunArtifactListResponse(run_id=run.id, items=items)
 
 
 def _build_checkpoint_path(run: Run) -> str:
