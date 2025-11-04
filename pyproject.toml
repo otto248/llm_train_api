@@ -1,0 +1,22 @@
+[project]
+name = "llm-train-api"
+version = "0.1.0"
+description = "FastAPI service managing LLM training workflows"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{name = "CMB AI"}]
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.24",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1",
+]
+
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
