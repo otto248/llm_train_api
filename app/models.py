@@ -73,6 +73,10 @@ class Run(Base):
     checkpoint_tags: Mapped[List["CheckpointTag"]] = relationship(
         back_populates="run", cascade="all, delete-orphan"
     )
+    logs: Mapped[List["RunLog"]] = relationship(back_populates="run", cascade="all, delete-orphan")
+    artifacts: Mapped[List["RunArtifact"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
 
 
 class CheckpointTag(Base):
@@ -102,3 +106,45 @@ class IdempotencyKey(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     experiment: Mapped[Experiment] = relationship(back_populates="idempotency_records")
+
+
+class RunLog(Base):
+    __tablename__ = "run_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"), index=True)
+    level: Mapped[str] = mapped_column(String(20), default="INFO")
+    message: Mapped[str] = mapped_column(Text())
+    meta: Mapped[Dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    run: Mapped[Run] = relationship(back_populates="logs")
+
+    @property
+    def metadata(self) -> Dict[str, Any]:
+        return self.meta
+
+    @metadata.setter
+    def metadata(self, value: Dict[str, Any]) -> None:
+        self.meta = value
+
+
+class RunArtifact(Base):
+    __tablename__ = "run_artifacts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"), index=True)
+    artifact_type: Mapped[str] = mapped_column(String(50))
+    path: Mapped[str] = mapped_column(Text())
+    meta: Mapped[Dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    run: Mapped[Run] = relationship(back_populates="artifacts")
+
+    @property
+    def metadata(self) -> Dict[str, Any]:
+        return self.meta
+
+    @metadata.setter
+    def metadata(self, value: Dict[str, Any]) -> None:
+        self.meta = value
