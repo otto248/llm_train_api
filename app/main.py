@@ -30,6 +30,18 @@ from .utils import compute_payload_hash, generate_experiment_id, generate_run_id
 app = FastAPI(title="LLM Training API", version="1.4")
 
 
+@app.get("/", tags=["Meta"])
+def read_root() -> dict[str, str]:
+    """Simple service metadata for quick smoke checks."""
+
+    return {
+        "message": "LLM Train API service is running",
+        "docs_url": "/docs",
+        "openapi_url": "/openapi.json",
+        "version": app.version or "unknown",
+    }
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
