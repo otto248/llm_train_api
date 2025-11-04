@@ -5,10 +5,17 @@
 ## 快速开始
 
 ```bash
-uvicorn app.main:app --reload
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install fastapi "uvicorn[standard]" sqlalchemy "pydantic>=2"
 ```
 
-启动后可访问 `http://127.0.0.1:8000/docs` 查看在线接口文档。
+完成依赖安装后，可通过以下命令启动本地服务：
+
+```bash
+python -m app.main
+```
+
+启动后可访问 `http://127.0.0.1:8000/docs` 查看在线接口文档。如果缺少 `uvicorn` 等依赖，程序会给出明确的错误提示。
 
 ## 主要接口概览
 

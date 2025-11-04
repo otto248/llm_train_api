@@ -332,3 +332,14 @@ def mark_checkpoint(
 
 def _build_checkpoint_path(run: Run) -> str:
     return f"/ckpts/{run.experiment_id}/{run.id}/latest.pt"
+
+
+if __name__ == "__main__":
+    try:
+        import uvicorn
+    except ImportError as exc:  # pragma: no cover - runtime guard
+        raise SystemExit(
+            "uvicorn is required to run the API server. Install project dependencies as described in the README."
+        ) from exc
+
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8000)
