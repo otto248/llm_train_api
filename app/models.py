@@ -115,10 +115,18 @@ class RunLog(Base):
     run_id: Mapped[str] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"), index=True)
     level: Mapped[str] = mapped_column(String(20), default="INFO")
     message: Mapped[str] = mapped_column(Text())
-    metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    meta: Mapped[Dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     run: Mapped[Run] = relationship(back_populates="logs")
+
+    @property
+    def metadata(self) -> Dict[str, Any]:
+        return self.meta
+
+    @metadata.setter
+    def metadata(self, value: Dict[str, Any]) -> None:
+        self.meta = value
 
 
 class RunArtifact(Base):
@@ -128,7 +136,15 @@ class RunArtifact(Base):
     run_id: Mapped[str] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"), index=True)
     artifact_type: Mapped[str] = mapped_column(String(50))
     path: Mapped[str] = mapped_column(Text())
-    metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    meta: Mapped[Dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     run: Mapped[Run] = relationship(back_populates="artifacts")
+
+    @property
+    def metadata(self) -> Dict[str, Any]:
+        return self.meta
+
+    @metadata.setter
+    def metadata(self, value: Dict[str, Any]) -> None:
+        self.meta = value
