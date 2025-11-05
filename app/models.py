@@ -21,6 +21,12 @@ class RunStatus(str, Enum):
     PAUSED = "paused"
 
 
+class TrainMethod(str, Enum):
+    SFT = "SFT"
+    LORA = "LoRA"
+    RF = "RF"
+
+
 class RunResourceConfig(BaseModel):
     nodes: int = Field(..., ge=1, description="Number of compute nodes to allocate")
     gpus_per_node: int = Field(..., ge=0, description="Number of GPUs per node")
@@ -46,11 +52,19 @@ class RunConfig(BaseModel):
 
 class ProjectCreate(BaseModel):
     name: str
+    description: Optional[str] = None
     objective: str
     task_type: str
     base_model: str
     owner: str
     tags: List[str] = Field(default_factory=list)
+    train_method: TrainMethod = Field(
+        default=TrainMethod.SFT, description="Training methodology, e.g. SFT, LoRA, or RF"
+    )
+    default_hyperparameters: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Default hyperparameter configuration for the selected training method",
+    )
 
 
 class Project(ProjectCreate):
