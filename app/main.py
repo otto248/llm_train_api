@@ -6,7 +6,7 @@ import subprocess
 from typing import List
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Path, Query
+from fastapi import Depends, FastAPI, HTTPException, Path
 
 from .models import (
     LogEntry,
@@ -158,80 +158,5 @@ def create_run(
     )
     run = store.update_run_status(run.id, RunStatus.RUNNING, progress=0.05)
     return run
-
-
-@app.get("/projects/{project_id}/runs/{run_id}", response_model=RunDetail)
-def get_run(
-    project_id: str = Path(..., description="Project identifier"),
-    run_id: str = Path(..., description="Run identifier"),
-    store: InMemoryStorage = Depends(get_storage),
-) -> RunDetail:
-    """Retrieve the status and metrics of a run (5.2.4)."""
-    project = store.get_project(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    run = store.get_run(run_id)
-    if run is None or run.project_id != project_id:
-        raise HTTPException(status_code=404, detail="Run not found")
-    return run
-
-
-@app.post("/projects/{project_id}/runs/{run_id}/cancel", response_model=RunDetail)
-def cancel_run(
-    project_id: str,
-    run_id: str,
-    store: InMemoryStorage = Depends(get_storage),
-) -> RunDetail:
-    """Cancel an active run (5.2.5)."""
-    project = store.get_project(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    run = store.get_run(run_id)
-    if run is None or run.project_id != project_id:
-        raise HTTPException(status_code=404, detail="Run not found")
-    return store.cancel_run(run_id)
-
-
-@app.post("/projects/{project_id}/runs/{run_id}/resume", response_model=RunDetail, status_code=201)
-def resume_run(
-    project_id: str,
-    run_id: str,
-    source_artifact_id: str = Query(..., description="Checkpoint artifact to resume from"),
-    store: InMemoryStorage = Depends(get_storage),
-) -> RunDetail:
-    """Resume a run from a checkpoint (5.2.8)."""
-    project = store.get_project(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    run = store.get_run(run_id)
-    if run is None or run.project_id != project_id:
-        raise HTTPException(status_code=404, detail="Run not found")
-    artifact = next((artifact for artifact in run.artifacts if artifact.id == source_artifact_id), None)
-    if artifact is None:
-        raise HTTPException(status_code=404, detail="Checkpoint artifact not found")
-    _ensure_project_assets_available(project)
-    start_command = _build_start_command(project)
-    resumed_run = store.resume_run(project_id, run_id, source_artifact_id, start_command)
-    resumed_run.logs.append(
-        LogEntry(
-            timestamp=datetime.utcnow(),
-            level="INFO",
-            message=(
-                "已确认训练资源数据集 "
-                f"{project.dataset_name}，配置 {project.training_yaml_name}"
-            ),
-        )
-    )
-    resumed_run.logs.append(
-        LogEntry(
-            timestamp=datetime.utcnow(),
-            level="INFO",
-            message=(
-                f"从检查点 {source_artifact_id} 重新启动训练命令：{start_command}"
-            ),
-        )
-    )
-    store.update_run_status(resumed_run.id, RunStatus.RUNNING, progress=0.05)
-    return resumed_run
 
 
