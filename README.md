@@ -15,6 +15,127 @@
 | `GET` | `/projects` | 列出全部项目概览。
 | `POST` | `/projects/{project_reference}/runs` | 基于项目 ID 或名称启动一次训练。
 
+## API 请求示例
+
+### 创建项目 `POST /projects`
+- **功能**：登记一个新的训练项目并保存其配置。
+- **请求体**：
+
+  ```json
+  {
+    "name": "qwen-pretrain",
+    "description": "Qwen 预训练任务",
+    "owner": "alice",
+    "tags": ["nlp", "pretrain"],
+    "dataset_name": "datasets/qwen_mix.parquet",
+    "training_yaml_name": "configs/qwen_pretrain.yaml"
+  }
+  ```
+- **成功响应示例** (`201 Created`)：
+
+  ```json
+  {
+    "id": "4c6f3f98-2417-4d8f-8ab5-ea81bc8b9179",
+    "name": "qwen-pretrain",
+    "description": "Qwen 预训练任务",
+    "owner": "alice",
+    "tags": ["nlp", "pretrain"],
+    "dataset_name": "datasets/qwen_mix.parquet",
+    "training_yaml_name": "configs/qwen_pretrain.yaml",
+    "status": "active",
+    "created_at": "2024-03-20T06:32:14.027Z",
+    "updated_at": "2024-03-20T06:32:14.027Z",
+    "runs_started": 0,
+    "runs": []
+  }
+  ```
+
+### 查询项目列表 `GET /projects`
+- **功能**：检索所有项目的概要信息，常用于前端列表或自动化巡检。
+- **入参**：无需请求体。
+- **成功响应示例** (`200 OK`)：
+
+  ```json
+  [
+    {
+      "id": "4c6f3f98-2417-4d8f-8ab5-ea81bc8b9179",
+      "name": "qwen-pretrain",
+      "description": "Qwen 预训练任务",
+      "owner": "alice",
+      "tags": ["nlp", "pretrain"],
+      "dataset_name": "datasets/qwen_mix.parquet",
+      "training_yaml_name": "configs/qwen_pretrain.yaml",
+      "status": "active",
+      "created_at": "2024-03-20T06:32:14.027Z",
+      "updated_at": "2024-03-20T06:32:14.027Z",
+      "runs_started": 1
+    }
+  ]
+  ```
+
+### 触发训练运行 `POST /projects/{project_reference}/runs`
+- **功能**：针对指定项目启动一次训练，`project_reference` 可使用项目 ID 或项目名称。
+- **入参**：路径参数 `project_reference`，无需请求体。
+- **成功响应示例** (`201 Created`)：
+
+  ```json
+  {
+    "id": "0a3ce3b0-7f91-4c79-8b0e-2cbf9f7d88d9",
+    "project_id": "4c6f3f98-2417-4d8f-8ab5-ea81bc8b9179",
+    "status": "running",
+    "created_at": "2024-03-20T06:35:11.482Z",
+    "updated_at": "2024-03-20T06:35:11.719Z",
+    "started_at": "2024-03-20T06:35:11.719Z",
+    "completed_at": null,
+    "progress": 0.05,
+    "metrics": {},
+    "start_command": "bash run_train_full_sft.sh configs/qwen_pretrain.yaml",
+    "artifacts": [
+      {
+        "id": "f180f7f9-9e25-4c6f-85a5-6126d71b1b3c",
+        "name": "checkpoint_step_0.pt",
+        "type": "checkpoint",
+        "path": "s3://artifacts/4c6f3f98-2417-4d8f-8ab5-ea81bc8b9179/0a3ce3b0-7f91-4c79-8b0e-2cbf9f7d88d9/checkpoint_step_0.pt",
+        "created_at": "2024-03-20T06:35:11.482Z",
+        "tags": []
+      }
+    ],
+    "logs": [
+      {
+        "timestamp": "2024-03-20T06:35:11.482Z",
+        "level": "INFO",
+        "message": "Run created"
+      },
+      {
+        "timestamp": "2024-03-20T06:35:11.482Z",
+        "level": "INFO",
+        "message": "Initializing resources"
+      },
+      {
+        "timestamp": "2024-03-20T06:35:11.482Z",
+        "level": "INFO",
+        "message": "Loading dataset"
+      },
+      {
+        "timestamp": "2024-03-20T06:35:11.482Z",
+        "level": "INFO",
+        "message": "Starting training loop"
+      },
+      {
+        "timestamp": "2024-03-20T06:35:11.719Z",
+        "level": "INFO",
+        "message": "已确认训练资源数据集 datasets/qwen_mix.parquet，配置 configs/qwen_pretrain.yaml"
+      },
+      {
+        "timestamp": "2024-03-20T06:35:11.719Z",
+        "level": "INFO",
+        "message": "已触发训练命令：bash run_train_full_sft.sh configs/qwen_pretrain.yaml (PID 42173)"
+      }
+    ],
+    "resume_source_artifact_id": null
+  }
+  ```
+
 ## 快速开始
 ```bash
 pip install -r requirements.txt
