@@ -4,9 +4,9 @@ from datetime import datetime
 import logging
 import subprocess
 from typing import List
-from pathlib import Path
+from pathlib import Path as PathlibPath
 
-from fastapi import Depends, FastAPI, HTTPException, Path
+from fastapi import Depends, FastAPI, HTTPException, Path as PathParam
 
 from .models import (
     LogEntry,
@@ -28,7 +28,7 @@ _DOCKER_CONTAINER_NAME = "qwen2.5-14b-instruct_xpytorch_full_sft"
 _DOCKER_WORKING_DIR = "KTIP_Release_2.1.0/train/llm"
 
 
-_HOST_TRAINING_PATH = Path(_HOST_TRAINING_DIR).resolve()
+_HOST_TRAINING_PATH = PathlibPath(_HOST_TRAINING_DIR).resolve()
 
 
 def _launch_training_process(start_command: str) -> subprocess.Popen[bytes]:
@@ -61,7 +61,7 @@ def _build_start_command(project: ProjectDetail) -> str:
     return f"bash run_train_full_sft.sh {project.training_yaml_name}"
 
 
-def _resolve_project_asset(relative_path: str) -> Path:
+def _resolve_project_asset(relative_path: str) -> PathlibPath:
     candidate = (_HOST_TRAINING_PATH / relative_path).resolve()
     try:
         candidate.relative_to(_HOST_TRAINING_PATH)
@@ -116,7 +116,7 @@ def list_projects(store: InMemoryStorage = Depends(get_storage)) -> List[Project
 
 @app.post("/projects/{project_reference}/runs", response_model=RunDetail, status_code=201)
 def create_run(
-    project_reference: str = Path(
+    project_reference: str = PathParam(
         ..., description="Project identifier or unique name"
     ),
     store: InMemoryStorage = Depends(get_storage),
