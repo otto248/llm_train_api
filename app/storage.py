@@ -124,14 +124,6 @@ class InMemoryStorage:
             run.metrics.update(metrics)
         return run
 
-    def cancel_run(self, run_id: str) -> RunDetail:
-        run = self._runs[run_id]
-        if run.status not in {RunStatus.CANCELED, RunStatus.COMPLETED, RunStatus.FAILED}:
-            run.status = RunStatus.CANCELED
-            run.updated_at = datetime.utcnow()
-            run.completed_at = run.completed_at or datetime.utcnow()
-        return run
-
     # Log operations -----------------------------------------------------
     def _filter_logs(self, logs: List[LogEntry], params: LogQueryParams) -> List[LogEntry]:
         filtered = logs
@@ -200,19 +192,5 @@ class InMemoryStorage:
             )
             for artifact_type, name in artifact_templates
         )
-
-    def resume_run(
-        self,
-        project_id: str,
-        run_id: str,
-        source_artifact_id: str,
-        start_command: str,
-    ) -> RunDetail:
-        return self.create_run(
-            project_id=project_id,
-            start_command=start_command,
-            resume_source_artifact_id=source_artifact_id,
-        )
-
 
 storage = InMemoryStorage()
