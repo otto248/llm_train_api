@@ -4,6 +4,7 @@ from datetime import datetime
 import logging
 import subprocess
 from typing import List
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Path, Query
 
@@ -28,14 +29,17 @@ _DOCKER_CONTAINER_NAME = "qwen2.5-14b-instruct_xpytorch_full_sft"
 _DOCKER_WORKING_DIR = "KTIP_Release_2.1.0/train/llm"
 
 
-def _launch_training_process(training_yaml_name: str) -> subprocess.Popen[bytes]:
+_HOST_TRAINING_PATH = Path(_HOST_TRAINING_DIR).resolve()
+
+
+def _launch_training_process(start_command: str) -> subprocess.Popen[bytes]:
     """Kick off the remote training command inside the target Docker container."""
 
     docker_command = (
         f"cd {_HOST_TRAINING_DIR} && "
         f"docker exec -i {_DOCKER_CONTAINER_NAME} "
         "env LANG=C.UTF-8 bash -lc "
-        f"\"cd {_DOCKER_WORKING_DIR} && bash run_train_full_sft.sh {training_yaml_name}\""
+        f"\"cd {_DOCKER_WORKING_DIR} && {start_command}\""
     )
     logger.info("Launching training command: %s", docker_command)
     try:
@@ -52,6 +56,35 @@ def _launch_training_process(training_yaml_name: str) -> subprocess.Popen[bytes]
 
 def get_storage() -> InMemoryStorage:
     return storage
+
+
+def _resolve_project_asset(relative_path: str) -> Path:
+    candidate = (_HOST_TRAINING_PATH / relative_path).resolve()
+    try:
+        candidate.relative_to(_HOST_TRAINING_PATH)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"资源路径无效：仅允许访问位于 {_HOST_TRAINING_PATH} 下的文件或目录。"
+            ),
+        ) from exc
+    return candidate
+
+
+def _ensure_project_assets_available(project: ProjectDetail) -> None:
+    missing: List[str] = []
+    dataset_path = _resolve_project_asset(project.dataset_name)
+    if not dataset_path.exists():
+        missing.append(f"数据集 {project.dataset_name}")
+    yaml_path = _resolve_project_asset(project.training_yaml_name)
+    if not yaml_path.exists():
+        missing.append(f"训练配置 {project.training_yaml_name}")
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail="以下项目资源尚未上传完成：" + "、".join(missing),
+        )
 
 
 @app.post("/projects", response_model=ProjectDetail, status_code=201)
@@ -77,9 +110,20 @@ def create_run(
     project = store.get_project(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
+    _ensure_project_assets_available(project)
     run = store.create_run(project_id, payload)
+    run.logs.append(
+        LogEntry(
+            timestamp=datetime.utcnow(),
+            level="INFO",
+            message=(
+                "已确认训练资源：数据集 "
+                f"{project.dataset_name}，配置 {project.training_yaml_name}"
+            ),
+        )
+    )
     try:
-        process = _launch_training_process(project.training_yaml_name)
+        process = _launch_training_process(payload.start_command)
     except RuntimeError as exc:
         run.logs.append(
             LogEntry(
@@ -96,8 +140,7 @@ def create_run(
             timestamp=datetime.utcnow(),
             level="INFO",
             message=(
-                "已触发训练命令：bash run_train_full_sft.sh "
-                f"{project.training_yaml_name} (PID {process.pid})"
+                f"已触发训练命令：{payload.start_command} (PID {process.pid})"
             ),
         )
     )

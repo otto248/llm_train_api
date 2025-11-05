@@ -22,9 +22,9 @@
 - [开发提示](#开发提示)
 
 ## 功能亮点
-- 定义项目元数据，例如名称、描述、目标、任务类型、基线模型和负责人（需求 5.2.1）。
+- 定义项目元数据，例如名称、描述、目标、任务类型、负责人以及绑定的数据集和训练 YAML（需求 5.2.1）。
 - 列出项目概览，查看状态、负责人和创建时间等关键信息（需求 5.2.2 精简版）。
-- 启动新的训练运行，包括模型、数据集、超参数和资源配置，并自动在目标 Docker 容器内执行训练脚本（需求 5.2.3）。
+- 启动新的训练运行，仅需提供启动命令，接口会校验项目数据集与 YAML 是否就绪，并在目标 Docker 容器内执行训练脚本（需求 5.2.3）。
 - 监控训练进度，包括状态、指标、时间戳和 GPU 使用情况（需求 5.2.4）。
 - 取消正在运行的训练，同时保留最新的检查点（需求 5.2.5）。
 - 从选定的检查点恢复训练（需求 5.2.8）。
@@ -45,7 +45,7 @@ app/
 | 模块 | 关键职责 | 代表对象/函数 |
 | --- | --- | --- |
 | `app.main` | 初始化 FastAPI、注册路由、定义依赖注入。 | `app`, `get_storage`, 各类路由处理函数 |
-| `app.models` | 描述领域实体，提供请求体验证、响应序列化以及默认值。 | `ProjectCreate`, `RunDetail`, `RunConfig`, `Artifact` 等 |
+| `app.models` | 描述领域实体，提供请求体验证、响应序列化以及默认值。 | `ProjectCreate`, `RunCreate`, `RunDetail`, `Artifact` 等 |
 | `app.storage` | 模拟数据库 + 任务编排：生成 ID、维护项目状态、虚拟化日志/指标/工件。 | `InMemoryStorage`, `create_project`, `create_run`, `cancel_run` |
 
 > **提示：** `InMemoryStorage` 使用 Python 内存保存所有数据，服务重启会导致信息丢失，适合演示或单元测试阶段。
@@ -223,14 +223,16 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
 
 ### 创建训练运行
 - **方法与路径：** `POST /projects/{project_id}/runs`
-- **功能描述：** 为项目创建新的训练运行（需求 5.2.3）。接口会读取项目绑定的 `training_yaml_name`，并在后端服务器上按如下步骤调度训练：
+- **功能描述：** 为项目创建新的训练运行（需求 5.2.3）。接口会读取项目绑定的 `dataset_name` 与 `training_yaml_name`，先在宿主机
+  `/data1/qwen2.5-14bxxxx` 下确认对应的数据集和 YAML 文件均已上传，再按照如下顺序调度训练：
 
   1. `cd /data1/qwen2.5-14bxxxx`
   2. `docker exec -i qwen2.5-14b-instruct_xpytorch_full_sft env LANG=C.UTF-8 bash`
   3. 在容器中执行 `cd KTIP_Release_2.1.0/train/llm`
-  4. 运行 `bash run_train_full_sft.sh <training_yaml_name>`
+  4. 运行请求体中提供的启动命令（例如 `bash run_train_full_sft.sh train.yaml`）
 
-  命令会以后台进程方式启动，接口立即返回；若命令无法启动，会返回 `500` 错误并将运行标记为 `failed`。
+  训练会以后台进程方式启动，接口立即返回；若命令无法启动，会返回 `500` 错误并将运行标记为 `failed`。若数据集或 YAML 未找到，接口会返回
+  `400` 并给出缺失项。
 - **入参：**
   - **路径参数：**
 
@@ -242,56 +244,12 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
 
     | 字段 | 类型 | 必填 | 说明 |
     | --- | --- | --- | --- |
-    | `config` | object | 是 | 训练配置，详见下表。 |
-
-    **`config` 对象字段：**
-
-    | 字段 | 类型 | 必填 | 说明 |
-    | --- | --- | --- | --- |
-    | `model` | string | 是 | 本次训练所使用或微调的模型。 |
-    | `dataset` | string | 是 | 数据集名称或路径。 |
-    | `hyperparameters` | object | 是 | 训练超参数，参见下一表。 |
-    | `resources` | object | 是 | 资源配置，参见下一表。 |
-    | `notes` | string | 否 | 可选备注信息。 |
-
-    **`config.hyperparameters` 字段：**
-
-    | 字段 | 类型 | 必填 | 说明 |
-    | --- | --- | --- | --- |
-    | `learning_rate` | float | 是 | 学习率，需大于 0。 |
-    | `batch_size` | integer | 是 | 批大小，需大于 0。 |
-    | `epochs` | integer | 是 | 训练轮数。 |
-    | `optimizer` | string | 是 | 优化器名称，例如 `adamw`。 |
-    | `extra` | object | 否 | 其他自定义超参数，键值对形式。 |
-
-    **`config.resources` 字段：**
-
-    | 字段 | 类型 | 必填 | 说明 |
-    | --- | --- | --- | --- |
-    | `nodes` | integer | 是 | 计算节点数量，至少为 1。 |
-    | `gpus_per_node` | integer | 是 | 每个节点的 GPU 数量，可为 0。 |
-    | `cpus_per_node` | integer | 是 | 每个节点的 CPU 数量。 |
-    | `memory_gb` | integer | 是 | 每个节点的内存大小（GB）。 |
+    | `start_command` | string | 是 | 在容器内执行的训练命令，例如 `bash run_train_full_sft.sh train.yaml`。 |
 
   - **示例请求体：**
     ```json
     {
-      "config": {
-        "model": "llama-2-13b",
-        "dataset": "中文科技论文语料",
-        "hyperparameters": {
-          "learning_rate": 2e-5,
-          "batch_size": 32,
-          "epochs": 3,
-          "optimizer": "adamw"
-        },
-        "resources": {
-          "nodes": 2,
-          "gpus_per_node": 4,
-          "cpus_per_node": 32,
-          "memory_gb": 256
-        }
-      }
+      "start_command": "bash run_train_full_sft.sh seal-train.yaml"
     }
     ```
 - **出参：** `201 Created`
@@ -308,7 +266,7 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     | `completed_at` | datetime/null | 完成或终止时间。 |
     | `progress` | float | 运行进度（0–1）。 |
     | `metrics` | object | 模拟的指标字典。 |
-    | `config` | object | 与请求体相同的训练配置。 |
+    | `start_command` | string | 实际触发的训练命令。 |
     | `artifacts` | array[object] | 运行关联的工件列表。 |
     | `logs` | array[object] | 模拟生成的日志条目。 |
     | `resume_source_artifact_id` | string/null | 若为恢复运行，指向使用的检查点 ID。 |
@@ -325,25 +283,33 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
       "completed_at": null,
       "progress": 0.05,
       "metrics": {},
-      "config": {
-        "model": "llama-2-13b",
-        "dataset": "中文科技论文语料",
-        "hyperparameters": {
-          "learning_rate": 2e-5,
-          "batch_size": 32,
-          "epochs": 3,
-          "optimizer": "adamw",
-          "extra": {}
+      "start_command": "bash run_train_full_sft.sh seal-train.yaml",
+      "artifacts": [
+        {
+          "id": "art_ckpt",
+          "name": "checkpoint_step_0.pt",
+          "type": "checkpoint",
+          "path": "s3://artifacts/proj_xxx/run_001/checkpoint_step_0.pt",
+          "created_at": "2024-01-02T08:00:00Z",
+          "tags": []
         },
-        "resources": {
-          "nodes": 2,
-          "gpus_per_node": 4,
-          "cpus_per_node": 32,
-          "memory_gb": 256
+        {
+          "id": "art_tb",
+          "name": "events.out.tfevents",
+          "type": "tensorboard",
+          "path": "s3://artifacts/proj_xxx/run_001/events.out.tfevents",
+          "created_at": "2024-01-02T08:00:00Z",
+          "tags": []
         },
-        "notes": null
-      },
-      "artifacts": [],
+        {
+          "id": "art_cfg",
+          "name": "training_config.yaml",
+          "type": "config",
+          "path": "s3://artifacts/proj_xxx/run_001/training_config.yaml",
+          "created_at": "2024-01-02T08:00:00Z",
+          "tags": []
+        }
+      ],
       "logs": [
         {
           "timestamp": "2024-01-02T08:00:00Z",
@@ -353,7 +319,27 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
         {
           "timestamp": "2024-01-02T08:00:00Z",
           "level": "INFO",
-          "message": "已触发训练命令：bash run_train_full_sft.sh seal-train.yaml (PID 43210)"
+          "message": "Initializing resources"
+        },
+        {
+          "timestamp": "2024-01-02T08:00:00Z",
+          "level": "INFO",
+          "message": "Loading dataset"
+        },
+        {
+          "timestamp": "2024-01-02T08:00:00Z",
+          "level": "INFO",
+          "message": "Starting training loop"
+        },
+        {
+          "timestamp": "2024-01-02T08:00:00Z",
+          "level": "INFO",
+          "message": "已确认训练资源：数据集 seal-documents-v1，配置 seal-train.yaml"
+        },
+        {
+          "timestamp": "2024-01-02T08:00:00Z",
+          "level": "INFO",
+          "message": "已触发训练命令：bash run_train_full_sft.sh seal-train.yaml (PID 4242)"
         }
       ],
       "resume_source_artifact_id": null
@@ -364,22 +350,7 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
   curl -X POST "http://localhost:8000/projects/proj_xxx/runs" \
     -H "Content-Type: application/json" \
     -d '{
-          "config": {
-            "model": "llama-2-13b",
-            "dataset": "中文科技论文语料",
-            "hyperparameters": {
-              "learning_rate": 2e-5,
-              "batch_size": 32,
-              "epochs": 3,
-              "optimizer": "adamw"
-            },
-            "resources": {
-              "nodes": 2,
-              "gpus_per_node": 4,
-              "cpus_per_node": 32,
-              "memory_gb": 256
-            }
-          }
+          "start_command": "bash run_train_full_sft.sh seal-train.yaml"
         }'
   ```
 
@@ -394,7 +365,7 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     | `project_id` | string | 是 | 所属项目 ID。 |
     | `run_id` | string | 是 | 运行 ID。 |
 - **出参：** `200 OK`
-  - **响应体字段：** 返回与 [创建训练运行](#创建训练运行) 相同的 `RunDetail` 结构，包含状态、指标、训练配置、工件、日志以及 `resume_source_artifact_id` 等信息。
+  - **响应体字段：** 返回与 [创建训练运行](#创建训练运行) 相同的 `RunDetail` 结构，包含状态、指标、启动命令、工件、日志以及 `resume_source_artifact_id` 等信息。
 
   - **响应示例：**
     ```json
@@ -411,24 +382,7 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
         "train_loss": 1.72,
         "eval_rouge_l": 38.4
       },
-      "config": {
-        "model": "llama-2-13b",
-        "dataset": "中文科技论文语料",
-        "hyperparameters": {
-          "learning_rate": 2e-5,
-          "batch_size": 32,
-          "epochs": 3,
-          "optimizer": "adamw",
-          "extra": {}
-        },
-        "resources": {
-          "nodes": 2,
-          "gpus_per_node": 4,
-          "cpus_per_node": 32,
-          "memory_gb": 256
-        },
-        "notes": null
-      },
+      "start_command": "bash run_train_full_sft.sh seal-train.yaml",
       "artifacts": [
         {
           "id": "ckpt_001",
@@ -481,24 +435,7 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
       "metrics": {
         "train_loss": 1.2
       },
-      "config": {
-        "model": "llama-2-13b",
-        "dataset": "中文科技论文语料",
-        "hyperparameters": {
-          "learning_rate": 2e-5,
-          "batch_size": 32,
-          "epochs": 3,
-          "optimizer": "adamw",
-          "extra": {}
-        },
-        "resources": {
-          "nodes": 2,
-          "gpus_per_node": 4,
-          "cpus_per_node": 32,
-          "memory_gb": 256
-        },
-        "notes": null
-      },
+      "start_command": "bash run_train_full_sft.sh seal-train.yaml",
       "artifacts": [
         {
           "id": "ckpt_cancel",
@@ -541,7 +478,7 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     | --- | --- | --- | --- |
     | `source_artifact_id` | string | 是 | 要恢复的检查点工件 ID。 |
 
-  - **请求体（JSON）：** 结构与 [创建训练运行](#创建训练运行) 一致，通过 `config` 字段提供新的训练配置，可覆盖模型、数据集、超参数与资源。
+  - **请求体（JSON）：** 结构与 [创建训练运行](#创建训练运行) 一致，通过 `start_command` 字段提供新的启动命令。
 
 - **出参：** `201 Created`
   - **响应体字段：** 返回新的 `RunDetail`，其 `resume_source_artifact_id` 会设置为查询参数提供的工件 ID，其余字段与创建运行一致。
@@ -558,24 +495,7 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
       "completed_at": null,
       "progress": 0.05,
       "metrics": {},
-      "config": {
-        "model": "llama-2-13b",
-        "dataset": "中文科技论文语料",
-        "hyperparameters": {
-          "learning_rate": 1.5e-5,
-          "batch_size": 32,
-          "epochs": 2,
-          "optimizer": "adamw",
-          "extra": {}
-        },
-        "resources": {
-          "nodes": 2,
-          "gpus_per_node": 4,
-          "cpus_per_node": 32,
-          "memory_gb": 256
-        },
-        "notes": null
-      },
+      "start_command": "bash run_train_full_sft.sh seal-train.yaml",
       "artifacts": [],
       "logs": [
         {
@@ -592,22 +512,7 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
   curl -X POST "http://localhost:8000/projects/proj_xxx/runs/run_001/resume?source_artifact_id=ckpt_001" \
     -H "Content-Type: application/json" \
     -d '{
-          "config": {
-            "model": "llama-2-13b",
-            "dataset": "中文科技论文语料",
-            "hyperparameters": {
-              "learning_rate": 1.5e-5,
-              "batch_size": 32,
-              "epochs": 2,
-              "optimizer": "adamw"
-            },
-            "resources": {
-              "nodes": 2,
-              "gpus_per_node": 4,
-              "cpus_per_node": 32,
-              "memory_gb": 256
-            }
-          }
+          "start_command": "bash run_train_full_sft.sh seal-train.yaml"
         }'
   ```
 
@@ -616,7 +521,7 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
 - ID 使用简短前缀自动生成（如 `proj_`、`run_`、`ckpt_`）。
 - 运行会自动生成模拟的指标、日志和工件，这些内容会直接体现在 `RunDetail` 响应中。
 - 取消运行会将状态改为 `canceled` 并产生一个最终检查点。
-- 恢复运行会克隆原运行的配置并关联到源检查点。
+- 恢复运行会克隆原运行的启动命令并关联到源检查点。
 
 在生产环境中，请将 `app/storage.py` 替换为与你的数据库、作业调度、监控与工件系统相连接的实现。
 

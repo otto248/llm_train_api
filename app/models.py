@@ -21,29 +21,6 @@ class RunStatus(str, Enum):
     PAUSED = "paused"
 
 
-class RunResourceConfig(BaseModel):
-    nodes: int = Field(..., ge=1, description="Number of compute nodes to allocate")
-    gpus_per_node: int = Field(..., ge=0, description="Number of GPUs per node")
-    cpus_per_node: int = Field(..., ge=1, description="Number of CPUs per node")
-    memory_gb: int = Field(..., ge=1, description="Memory in GB per node")
-
-
-class RunHyperParameters(BaseModel):
-    learning_rate: float = Field(..., gt=0)
-    batch_size: int = Field(..., gt=0)
-    epochs: int = Field(..., gt=0)
-    optimizer: str
-    extra: Dict[str, str] = Field(default_factory=dict)
-
-
-class RunConfig(BaseModel):
-    model: str
-    dataset: str
-    hyperparameters: RunHyperParameters
-    resources: RunResourceConfig
-    notes: Optional[str] = None
-
-
 class ProjectCreate(BaseModel):
     name: str
     description: Optional[str] = None
@@ -68,7 +45,9 @@ class Project(ProjectCreate):
 
 
 class RunCreate(BaseModel):
-    config: RunConfig
+    start_command: str = Field(
+        ..., description="Training command executed inside the target container"
+    )
 
 
 class LogEntry(BaseModel):
@@ -96,7 +75,7 @@ class Run(BaseModel):
     completed_at: Optional[datetime] = None
     progress: float = 0.0
     metrics: Dict[str, float] = Field(default_factory=dict)
-    config: RunConfig
+    start_command: str
     artifacts: List[Artifact] = Field(default_factory=list)
     logs: List[LogEntry] = Field(default_factory=list)
     resume_source_artifact_id: Optional[str] = None
@@ -117,12 +96,6 @@ class LogQueryParams(BaseModel):
 
 class ArtifactTagRequest(BaseModel):
     tag: str = Field(..., description="Tag to apply to the artifact")
-
-
-class ResumeRunRequest(BaseModel):
-    artifact_id: str
-    additional_epochs: Optional[int] = None
-    updated_hyperparameters: Optional[RunHyperParameters] = None
 
 
 class ArtifactListResponse(BaseModel):
