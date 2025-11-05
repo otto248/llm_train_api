@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from datetime import datetime
+import logging
+import subprocess
 from typing import List
 
 from fastapi import Depends, FastAPI, HTTPException, Path, Query
 
 from .models import (
+    LogEntry,
     Project,
     ProjectCreate,
     ProjectDetail,
@@ -16,6 +20,34 @@ from .models import (
 from .storage import InMemoryStorage, storage
 
 app = FastAPI(title="LLM Training Management API", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+
+_HOST_TRAINING_DIR = "/data1/qwen2.5-14bxxxx"
+_DOCKER_CONTAINER_NAME = "qwen2.5-14b-instruct_xpytorch_full_sft"
+_DOCKER_WORKING_DIR = "KTIP_Release_2.1.0/train/llm"
+
+
+def _launch_training_process(training_yaml_name: str) -> subprocess.Popen[bytes]:
+    """Kick off the remote training command inside the target Docker container."""
+
+    docker_command = (
+        f"cd {_HOST_TRAINING_DIR} && "
+        f"docker exec -i {_DOCKER_CONTAINER_NAME} "
+        "env LANG=C.UTF-8 bash -lc "
+        f"\"cd {_DOCKER_WORKING_DIR} && bash run_train_full_sft.sh {training_yaml_name}\""
+    )
+    logger.info("Launching training command: %s", docker_command)
+    try:
+        process = subprocess.Popen(  # noqa: S603, S607 - intentional command execution
+            ["bash", "-lc", docker_command],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except FileNotFoundError as exc:  # pragma: no cover - defensive guard
+        raise RuntimeError("无法执行训练命令，请检查服务器环境配置。") from exc
+    return process
 
 
 def get_storage() -> InMemoryStorage:
@@ -46,7 +78,30 @@ def create_run(
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     run = store.create_run(project_id, payload)
-    store.update_run_status(run.id, RunStatus.RUNNING, progress=0.05)
+    try:
+        process = _launch_training_process(project.training_yaml_name)
+    except RuntimeError as exc:
+        run.logs.append(
+            LogEntry(
+                timestamp=datetime.utcnow(),
+                level="ERROR",
+                message=str(exc),
+            )
+        )
+        store.update_run_status(run.id, RunStatus.FAILED)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    run.logs.append(
+        LogEntry(
+            timestamp=datetime.utcnow(),
+            level="INFO",
+            message=(
+                "已触发训练命令：bash run_train_full_sft.sh "
+                f"{project.training_yaml_name} (PID {process.pid})"
+            ),
+        )
+    )
+    run = store.update_run_status(run.id, RunStatus.RUNNING, progress=0.05)
     return run
 
 

@@ -24,7 +24,7 @@
 ## 功能亮点
 - 定义项目元数据，例如名称、描述、目标、任务类型、基线模型和负责人（需求 5.2.1）。
 - 列出项目概览，查看状态、负责人和创建时间等关键信息（需求 5.2.2 精简版）。
-- 启动新的训练运行，包括模型、数据集、超参数和资源配置（需求 5.2.3）。
+- 启动新的训练运行，包括模型、数据集、超参数和资源配置，并自动在目标 Docker 容器内执行训练脚本（需求 5.2.3）。
 - 监控训练进度，包括状态、指标、时间戳和 GPU 使用情况（需求 5.2.4）。
 - 取消正在运行的训练，同时保留最新的检查点（需求 5.2.5）。
 - 从选定的检查点恢复训练（需求 5.2.8）。
@@ -223,7 +223,14 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
 
 ### 创建训练运行
 - **方法与路径：** `POST /projects/{project_id}/runs`
-- **功能描述：** 为项目创建新的训练运行（需求 5.2.3）。
+- **功能描述：** 为项目创建新的训练运行（需求 5.2.3）。接口会读取项目绑定的 `training_yaml_name`，并在后端服务器上按如下步骤调度训练：
+
+  1. `cd /data1/qwen2.5-14bxxxx`
+  2. `docker exec -i qwen2.5-14b-instruct_xpytorch_full_sft env LANG=C.UTF-8 bash`
+  3. 在容器中执行 `cd KTIP_Release_2.1.0/train/llm`
+  4. 运行 `bash run_train_full_sft.sh <training_yaml_name>`
+
+  命令会以后台进程方式启动，接口立即返回；若命令无法启动，会返回 `500` 错误并将运行标记为 `failed`。
 - **入参：**
   - **路径参数：**
 
@@ -342,6 +349,11 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
           "timestamp": "2024-01-02T08:00:00Z",
           "level": "INFO",
           "message": "Run created"
+        },
+        {
+          "timestamp": "2024-01-02T08:00:00Z",
+          "level": "INFO",
+          "message": "已触发训练命令：bash run_train_full_sft.sh seal-train.yaml (PID 43210)"
         }
       ],
       "resume_source_artifact_id": null
