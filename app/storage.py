@@ -15,7 +15,6 @@ from .models import (
     ProjectCreate,
     ProjectDetail,
     Run,
-    RunConfig,
     RunCreate,
     RunDetail,
     RunStatus,
@@ -51,11 +50,17 @@ class InMemoryStorage:
     def get_project(self, project_id: str) -> Optional[ProjectDetail]:
         return self._projects.get(project_id)
 
+    def get_project_by_name(self, project_name: str) -> Optional[ProjectDetail]:
+        return next(
+            (project for project in self._projects.values() if project.name == project_name),
+            None,
+        )
+
     # Run operations -----------------------------------------------------
     def _build_run(
         self,
         project_id: str,
-        run_config: RunConfig,
+        payload: RunCreate,
         resume_source_artifact_id: Optional[str] = None,
     ) -> RunDetail:
         run_id = str(uuid4())
@@ -70,7 +75,7 @@ class InMemoryStorage:
             completed_at=None,
             progress=0.0,
             metrics={},
-            config=run_config,
+            start_command=payload.start_command,
             artifacts=[],
             logs=[],
             resume_source_artifact_id=resume_source_artifact_id,
@@ -84,7 +89,7 @@ class InMemoryStorage:
         resume_source_artifact_id: Optional[str] = None,
     ) -> RunDetail:
         project = self._projects[project_id]
-        run = self._build_run(project_id, payload.config, resume_source_artifact_id)
+        run = self._build_run(project_id, payload, resume_source_artifact_id)
         project.runs.append(run)
         project.runs_started += 1
         project.updated_at = datetime.utcnow()
