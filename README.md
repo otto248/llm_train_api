@@ -101,11 +101,10 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     | `description` | string | 否 | 项目摘要，用于说明背景与需求。 |
     | `objective` | string | 是 | 训练目标或关键指标。 |
     | `task_type` | string | 是 | 任务类型，例如“文本摘要”“问答”。 |
-    | `base_model` | string | 是 | 训练所基于的模型。 |
     | `owner` | string | 是 | 负责人名称或工号。 |
+    | `dataset_name` | string | 是 | 项目关联的数据集名称或标识。 |
+    | `training_yaml_name` | string | 是 | 训练配置文件（YAML）的名称。 |
     | `tags` | array[string] | 否 | 自定义标签，便于分类检索。 |
-    | `train_method` | string | 否 | 训练方法，支持 `SFT`、`LoRA`、`RF`（默认 `SFT`）。 |
-    | `default_hyperparameters` | object | 否 | 默认超参数配置，键值对形式，可根据训练方法调整。 |
 
   - **示例请求体：**
     ```json
@@ -114,14 +113,10 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
       "description": "构建印章通用大模型",
       "objective": "初版模型训练",
       "task_type": "VL-Lora",
-      "base_model": "qwen-VL-7B",
       "owner": "LL",
-      "tags": ["VL", "通用印章"],
-      "train_method": "SFT",
-      "default_hyperparameters": {
-        "learning_rate": 5e-5,
-        "batch_size": 2
-      }
+      "dataset_name": "seal-documents-v1",
+      "training_yaml_name": "seal-train.yaml",
+      "tags": ["VL", "通用印章"]
     }
     ```
 - **出参：** `201 Created`
@@ -135,14 +130,13 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     | `status` | string | 当前状态，取值：`active` 或 `archived`。 |
     | `objective` | string | 训练目标。 |
     | `task_type` | string | 任务类型。 |
-    | `base_model` | string | 基线模型。 |
     | `owner` | string | 负责人。 |
+    | `dataset_name` | string | 项目关联的数据集名称或标识。 |
+    | `training_yaml_name` | string | 训练配置文件名称。 |
     | `created_at` | datetime | 创建时间（ISO 8601）。 |
     | `updated_at` | datetime | 更新时间（ISO 8601）。 |
     | `runs_started` | integer | 已创建的运行数量。 |
     | `tags` | array[string] | 标签列表。 |
-    | `train_method` | string | 训练方法。 |
-    | `default_hyperparameters` | object | 默认超参数。 |
     | `runs` | array[object] | 与项目关联的运行列表。 |
 
   - **响应示例：**
@@ -153,14 +147,13 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
       "status": "active",
       "objective": "初版模型训练",
       "task_type": "VL-Lora",
-      "base_model": "qwen-VL-7B",
       "owner": "LL",
+      "dataset_name": "seal-documents-v1",
+      "training_yaml_name": "seal-train.yaml",
       "created_at": "2024-01-01T12:00:00Z",
       "updated_at": "2024-01-01T12:00:00Z",
       "runs_started": 0,
       "tags": ["VL", "通用印章"],
-      "train_method": "SFT",
-      "default_hyperparameters": {"learning_rate": 5e-5, "batch_size": 2},
       "runs": []
     }
     ```
@@ -173,14 +166,10 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
           "description": "构建印章通用大模型",
           "objective": "初版模型训练",
           "task_type": "VL-Lora",
-          "base_model": "qwen-VL-7B",
           "owner": "LL",
-          "tags": ["VL", "通用印章"],
-          "train_method": "SFT",
-          "default_hyperparameters": {
-            "learning_rate": 5e-5,
-            "batch_size": 2
-          }
+          "dataset_name": "seal-documents-v1",
+          "training_yaml_name": "seal-train.yaml",
+          "tags": ["VL", "通用印章"]
         }'
   ```
 
@@ -199,14 +188,14 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     | `name` | string | 项目名称。 |
     | `status` | string | 项目状态，取值：`active` 或 `archived`。 |
     | `owner` | string | 负责人。 |
+    | `dataset_name` | string | 项目关联的数据集名称或标识。 |
+    | `training_yaml_name` | string | 训练配置文件名称。 |
     | `created_at` | datetime | 创建时间。 |
     | `updated_at` | datetime | 最近更新时间。 |
     | `runs_started` | integer | 已创建的运行数量。 |
     | `objective` | string | 训练目标。 |
     | `task_type` | string | 任务类型。 |
-    | `base_model` | string | 基线模型。 |
     | `tags` | array[string] | 标签列表。 |
-    | `train_method` | string | 训练方法。 |
 
   - **响应示例：**
     ```json
@@ -216,11 +205,11 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
         "name": "中文摘要系统",
         "status": "active",
         "owner": "小李",
+        "dataset_name": "cn-summarization-v2",
+        "training_yaml_name": "summarization-train.yaml",
         "objective": "降低阅读时间",
         "task_type": "文本摘要",
-        "base_model": "llama-2-13b",
         "tags": ["科研", "第一阶段"],
-        "train_method": "LoRA",
         "runs_started": 1,
         "created_at": "2024-01-01T12:00:00Z",
         "updated_at": "2024-01-02T09:30:00Z"
