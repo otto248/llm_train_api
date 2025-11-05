@@ -24,8 +24,6 @@ class RunStatus(str, Enum):
 class ProjectCreate(BaseModel):
     name: str
     description: Optional[str] = None
-    objective: str
-    task_type: str
     owner: str
     tags: List[str] = Field(default_factory=list)
     dataset_name: str = Field(

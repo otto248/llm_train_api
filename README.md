@@ -99,8 +99,6 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     | --- | --- | --- | --- |
     | `name` | string | 是 | 项目名称，需全局唯一。 |
     | `description` | string | 否 | 项目摘要，用于说明背景与需求。 |
-    | `objective` | string | 是 | 训练目标或关键指标。 |
-    | `task_type` | string | 是 | 任务类型，例如“文本摘要”“问答”。 |
     | `owner` | string | 是 | 负责人名称或工号。 |
     | `dataset_name` | string | 是 | 项目关联的数据集名称或标识。 |
     | `training_yaml_name` | string | 是 | 训练配置文件（YAML）的名称。 |
@@ -111,8 +109,6 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     {
       "name": "印章大模型",
       "description": "构建印章通用大模型",
-      "objective": "初版模型训练",
-      "task_type": "VL-Lora",
       "owner": "LL",
       "dataset_name": "seal-documents-v1",
       "training_yaml_name": "seal-train.yaml",
@@ -128,8 +124,6 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     | `name` | string | 项目名称。 |
     | `description` | string | 项目摘要。 |
     | `status` | string | 当前状态，取值：`active` 或 `archived`。 |
-    | `objective` | string | 训练目标。 |
-    | `task_type` | string | 任务类型。 |
     | `owner` | string | 负责人。 |
     | `dataset_name` | string | 项目关联的数据集名称或标识。 |
     | `training_yaml_name` | string | 训练配置文件名称。 |
@@ -145,8 +139,6 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
       "id": "proj_xxx",
       "name": "印章大模型",
       "status": "active",
-      "objective": "初版模型训练",
-      "task_type": "VL-Lora",
       "owner": "LL",
       "dataset_name": "seal-documents-v1",
       "training_yaml_name": "seal-train.yaml",
@@ -164,8 +156,6 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     -d '{
           "name": "印章大模型",
           "description": "构建印章通用大模型",
-          "objective": "初版模型训练",
-          "task_type": "VL-Lora",
           "owner": "LL",
           "dataset_name": "seal-documents-v1",
           "training_yaml_name": "seal-train.yaml",
@@ -193,8 +183,6 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     | `created_at` | datetime | 创建时间。 |
     | `updated_at` | datetime | 最近更新时间。 |
     | `runs_started` | integer | 已创建的运行数量。 |
-    | `objective` | string | 训练目标。 |
-    | `task_type` | string | 任务类型。 |
     | `tags` | array[string] | 标签列表。 |
 
   - **响应示例：**
@@ -207,8 +195,6 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
         "owner": "小李",
         "dataset_name": "cn-summarization-v2",
         "training_yaml_name": "summarization-train.yaml",
-        "objective": "降低阅读时间",
-        "task_type": "文本摘要",
         "tags": ["科研", "第一阶段"],
         "runs_started": 1,
         "created_at": "2024-01-01T12:00:00Z",
