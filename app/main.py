@@ -14,7 +14,6 @@ from .models import (
     ProjectCreate,
     ProjectDetail,
     Run,
-    RunCreate,
     RunDetail,
     RunStatus,
 )
@@ -56,6 +55,10 @@ def _launch_training_process(start_command: str) -> subprocess.Popen[bytes]:
 
 def get_storage() -> InMemoryStorage:
     return storage
+
+
+def _build_start_command(project: ProjectDetail) -> str:
+    return f"bash run_train_full_sft.sh {project.training_yaml_name}"
 
 
 def _resolve_project_asset(relative_path: str) -> Path:
@@ -113,7 +116,6 @@ def list_projects(store: InMemoryStorage = Depends(get_storage)) -> List[Project
 
 @app.post("/projects/{project_reference}/runs", response_model=RunDetail, status_code=201)
 def create_run(
-    payload: RunCreate,
     project_reference: str = Path(
         ..., description="Project identifier or unique name"
     ),
@@ -122,7 +124,8 @@ def create_run(
     """Start a new training run under a project (5.2.3)."""
     project = _get_project_by_reference(project_reference, store)
     _ensure_project_assets_available(project)
-    run = store.create_run(project.id, payload)
+    start_command = _build_start_command(project)
+    run = store.create_run(project.id, start_command)
     run.logs.append(
         LogEntry(
             timestamp=datetime.utcnow(),
@@ -134,7 +137,7 @@ def create_run(
         )
     )
     try:
-        process = _launch_training_process(payload.start_command)
+        process = _launch_training_process(start_command)
     except RuntimeError as exc:
         run.logs.append(
             LogEntry(
@@ -150,9 +153,7 @@ def create_run(
         LogEntry(
             timestamp=datetime.utcnow(),
             level="INFO",
-            message=(
-                f"已触发训练命令：{payload.start_command} (PID {process.pid})"
-            ),
+            message=(f"已触发训练命令：{start_command} (PID {process.pid})"),
         )
     )
     run = store.update_run_status(run.id, RunStatus.RUNNING, progress=0.05)
@@ -193,7 +194,6 @@ def cancel_run(
 
 @app.post("/projects/{project_id}/runs/{run_id}/resume", response_model=RunDetail, status_code=201)
 def resume_run(
-    payload: RunCreate,
     project_id: str,
     run_id: str,
     source_artifact_id: str = Query(..., description="Checkpoint artifact to resume from"),
@@ -209,7 +209,28 @@ def resume_run(
     artifact = next((artifact for artifact in run.artifacts if artifact.id == source_artifact_id), None)
     if artifact is None:
         raise HTTPException(status_code=404, detail="Checkpoint artifact not found")
-    resumed_run = store.resume_run(project_id, run_id, payload, source_artifact_id)
+    _ensure_project_assets_available(project)
+    start_command = _build_start_command(project)
+    resumed_run = store.resume_run(project_id, run_id, source_artifact_id, start_command)
+    resumed_run.logs.append(
+        LogEntry(
+            timestamp=datetime.utcnow(),
+            level="INFO",
+            message=(
+                "已确认训练资源数据集 "
+                f"{project.dataset_name}，配置 {project.training_yaml_name}"
+            ),
+        )
+    )
+    resumed_run.logs.append(
+        LogEntry(
+            timestamp=datetime.utcnow(),
+            level="INFO",
+            message=(
+                f"从检查点 {source_artifact_id} 重新启动训练命令：{start_command}"
+            ),
+        )
+    )
     store.update_run_status(resumed_run.id, RunStatus.RUNNING, progress=0.05)
     return resumed_run
 

@@ -15,7 +15,6 @@ from .models import (
     ProjectCreate,
     ProjectDetail,
     Run,
-    RunCreate,
     RunDetail,
     RunStatus,
 )
@@ -60,7 +59,7 @@ class InMemoryStorage:
     def _build_run(
         self,
         project_id: str,
-        payload: RunCreate,
+        start_command: str,
         resume_source_artifact_id: Optional[str] = None,
     ) -> RunDetail:
         run_id = str(uuid4())
@@ -75,7 +74,7 @@ class InMemoryStorage:
             completed_at=None,
             progress=0.0,
             metrics={},
-            start_command=payload.start_command,
+            start_command=start_command,
             artifacts=[],
             logs=[],
             resume_source_artifact_id=resume_source_artifact_id,
@@ -85,11 +84,11 @@ class InMemoryStorage:
     def create_run(
         self,
         project_id: str,
-        payload: RunCreate,
+        start_command: str,
         resume_source_artifact_id: Optional[str] = None,
     ) -> RunDetail:
         project = self._projects[project_id]
-        run = self._build_run(project_id, payload, resume_source_artifact_id)
+        run = self._build_run(project_id, start_command, resume_source_artifact_id)
         project.runs.append(run)
         project.runs_started += 1
         project.updated_at = datetime.utcnow()
@@ -206,12 +205,12 @@ class InMemoryStorage:
         self,
         project_id: str,
         run_id: str,
-        payload: RunCreate,
         source_artifact_id: str,
+        start_command: str,
     ) -> RunDetail:
         return self.create_run(
             project_id=project_id,
-            payload=payload,
+            start_command=start_command,
             resume_source_artifact_id=source_artifact_id,
         )
 

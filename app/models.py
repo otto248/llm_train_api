@@ -42,12 +42,6 @@ class Project(ProjectCreate):
     runs_started: int = 0
 
 
-class RunCreate(BaseModel):
-    start_command: str = Field(
-        ..., description="Training command executed inside the target container"
-    )
-
-
 class LogEntry(BaseModel):
     timestamp: datetime
     level: str
