@@ -72,6 +72,17 @@ def _resolve_project_asset(relative_path: str) -> Path:
     return candidate
 
 
+def _get_project_by_reference(
+    project_reference: str, store: InMemoryStorage
+) -> ProjectDetail:
+    project = store.get_project(project_reference)
+    if project is None:
+        project = store.get_project_by_name(project_reference)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
 def _ensure_project_assets_available(project: ProjectDetail) -> None:
     missing: List[str] = []
     dataset_path = _resolve_project_asset(project.dataset_name)
@@ -100,24 +111,24 @@ def list_projects(store: InMemoryStorage = Depends(get_storage)) -> List[Project
     return list(store.list_projects())
 
 
-@app.post("/projects/{project_id}/runs", response_model=RunDetail, status_code=201)
+@app.post("/projects/{project_reference}/runs", response_model=RunDetail, status_code=201)
 def create_run(
     payload: RunCreate,
-    project_id: str = Path(..., description="Project identifier"),
+    project_reference: str = Path(
+        ..., description="Project identifier or unique name"
+    ),
     store: InMemoryStorage = Depends(get_storage),
 ) -> RunDetail:
     """Start a new training run under a project (5.2.3)."""
-    project = store.get_project(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = _get_project_by_reference(project_reference, store)
     _ensure_project_assets_available(project)
-    run = store.create_run(project_id, payload)
+    run = store.create_run(project.id, payload)
     run.logs.append(
         LogEntry(
             timestamp=datetime.utcnow(),
             level="INFO",
             message=(
-                "已确认训练资源：数据集 "
+                "已确认训练资源数据集 "
                 f"{project.dataset_name}，配置 {project.training_yaml_name}"
             ),
         )

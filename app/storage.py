@@ -50,6 +50,12 @@ class InMemoryStorage:
     def get_project(self, project_id: str) -> Optional[ProjectDetail]:
         return self._projects.get(project_id)
 
+    def get_project_by_name(self, project_name: str) -> Optional[ProjectDetail]:
+        return next(
+            (project for project in self._projects.values() if project.name == project_name),
+            None,
+        )
+
     # Run operations -----------------------------------------------------
     def _build_run(
         self,

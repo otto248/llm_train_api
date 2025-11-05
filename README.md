@@ -222,8 +222,8 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
   ```
 
 ### 创建训练运行
-- **方法与路径：** `POST /projects/{project_id}/runs`
-- **功能描述：** 为项目创建新的训练运行（需求 5.2.3）。接口会读取项目绑定的 `dataset_name` 与 `training_yaml_name`，先在宿主机
+- **方法与路径：** `POST /projects/{project_reference}/runs`
+- **功能描述：** 为项目创建新的训练运行（需求 5.2.3）。接口接受项目的 **ID 或名称** 作为路径参数，并会读取项目绑定的 `dataset_name` 与 `training_yaml_name`，先在宿主机
   `/data1/qwen2.5-14bxxxx` 下确认对应的数据集和 YAML 文件均已上传，再按照如下顺序调度训练：
 
   1. `cd /data1/qwen2.5-14bxxxx`
@@ -238,7 +238,7 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
 
     | 名称 | 类型 | 必填 | 说明 |
     | --- | --- | --- | --- |
-    | `project_id` | string | 是 | 目标项目的唯一标识。 |
+    | `project_reference` | string | 是 | 目标项目的唯一 ID 或名称。若名称包含空格，请使用 URL 编码。 |
 
   - **请求体（JSON）：**
 
@@ -252,6 +252,7 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
       "start_command": "bash run_train_full_sft.sh seal-train.yaml"
     }
     ```
+- **说明：** 请求体无需再传入数据集或 YAML 名称，系统会根据项目配置自动完成校验。
 - **出参：** `201 Created`
   - **响应体字段：**
 
@@ -334,7 +335,7 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
         {
           "timestamp": "2024-01-02T08:00:00Z",
           "level": "INFO",
-          "message": "已确认训练资源：数据集 seal-documents-v1，配置 seal-train.yaml"
+          "message": "已确认训练资源数据集 seal-documents-v1，配置 seal-train.yaml"
         },
         {
           "timestamp": "2024-01-02T08:00:00Z",
@@ -348,6 +349,14 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
 - **curl 示例：**
   ```bash
   curl -X POST "http://localhost:8000/projects/proj_xxx/runs" \
+    -H "Content-Type: application/json" \
+    -d '{
+          "start_command": "bash run_train_full_sft.sh seal-train.yaml"
+        }'
+  ```
+
+  ```bash
+  curl -X POST "http://localhost:8000/projects/%E4%B8%AD%E6%96%87%E6%91%98%E8%A6%81%E7%B3%BB%E7%BB%9F/runs" \
     -H "Content-Type: application/json" \
     -d '{
           "start_command": "bash run_train_full_sft.sh seal-train.yaml"
