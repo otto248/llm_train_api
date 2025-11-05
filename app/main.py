@@ -160,22 +160,6 @@ def create_run(
     return run
 
 
-@app.get("/projects/{project_id}/runs/{run_id}", response_model=RunDetail)
-def get_run(
-    project_id: str = Path(..., description="Project identifier"),
-    run_id: str = Path(..., description="Run identifier"),
-    store: InMemoryStorage = Depends(get_storage),
-) -> RunDetail:
-    """Retrieve the status and metrics of a run (5.2.4)."""
-    project = store.get_project(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    run = store.get_run(run_id)
-    if run is None or run.project_id != project_id:
-        raise HTTPException(status_code=404, detail="Run not found")
-    return run
-
-
 @app.post("/projects/{project_id}/runs/{run_id}/cancel", response_model=RunDetail)
 def cancel_run(
     project_id: str,
