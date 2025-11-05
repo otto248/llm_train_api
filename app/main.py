@@ -1,31 +1,104 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
+import subprocess
 from typing import List
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Path, Query
 
 from .models import (
-    Artifact,
-    ArtifactListResponse,
-    ArtifactTagRequest,
-    LogListResponse,
-    LogQueryParams,
+    LogEntry,
     Project,
     ProjectCreate,
     ProjectDetail,
     Run,
-    RunCreate,
     RunDetail,
     RunStatus,
 )
 from .storage import InMemoryStorage, storage
 
 app = FastAPI(title="LLM Training Management API", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+
+_HOST_TRAINING_DIR = "/data1/qwen2.5-14bxxxx"
+_DOCKER_CONTAINER_NAME = "qwen2.5-14b-instruct_xpytorch_full_sft"
+_DOCKER_WORKING_DIR = "KTIP_Release_2.1.0/train/llm"
+
+
+_HOST_TRAINING_PATH = Path(_HOST_TRAINING_DIR).resolve()
+
+
+def _launch_training_process(start_command: str) -> subprocess.Popen[bytes]:
+    """Kick off the remote training command inside the target Docker container."""
+
+    docker_command = (
+        f"cd {_HOST_TRAINING_DIR} && "
+        f"docker exec -i {_DOCKER_CONTAINER_NAME} "
+        "env LANG=C.UTF-8 bash -lc "
+        f"\"cd {_DOCKER_WORKING_DIR} && {start_command}\""
+    )
+    logger.info("Launching training command: %s", docker_command)
+    try:
+        process = subprocess.Popen(  # noqa: S603, S607 - intentional command execution
+            ["bash", "-lc", docker_command],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except FileNotFoundError as exc:  # pragma: no cover - defensive guard
+        raise RuntimeError("无法执行训练命令，请检查服务器环境配置。") from exc
+    return process
 
 
 def get_storage() -> InMemoryStorage:
     return storage
+
+
+def _build_start_command(project: ProjectDetail) -> str:
+    return f"bash run_train_full_sft.sh {project.training_yaml_name}"
+
+
+def _resolve_project_asset(relative_path: str) -> Path:
+    candidate = (_HOST_TRAINING_PATH / relative_path).resolve()
+    try:
+        candidate.relative_to(_HOST_TRAINING_PATH)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"资源路径无效：仅允许访问位于 {_HOST_TRAINING_PATH} 下的文件或目录。"
+            ),
+        ) from exc
+    return candidate
+
+
+def _get_project_by_reference(
+    project_reference: str, store: InMemoryStorage
+) -> ProjectDetail:
+    project = store.get_project(project_reference)
+    if project is None:
+        project = store.get_project_by_name(project_reference)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+def _ensure_project_assets_available(project: ProjectDetail) -> None:
+    missing: List[str] = []
+    dataset_path = _resolve_project_asset(project.dataset_name)
+    if not dataset_path.exists():
+        missing.append(f"数据集 {project.dataset_name}")
+    yaml_path = _resolve_project_asset(project.training_yaml_name)
+    if not yaml_path.exists():
+        missing.append(f"训练配置 {project.training_yaml_name}")
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail="以下项目资源尚未上传完成：" + "、".join(missing),
+        )
 
 
 @app.post("/projects", response_model=ProjectDetail, status_code=201)
@@ -41,30 +114,49 @@ def list_projects(store: InMemoryStorage = Depends(get_storage)) -> List[Project
     return list(store.list_projects())
 
 
-@app.get("/projects/{project_id}", response_model=ProjectDetail)
-def get_project(
-    project_id: str = Path(..., description="Project identifier"),
-    store: InMemoryStorage = Depends(get_storage),
-) -> ProjectDetail:
-    """Retrieve detailed information about a project (5.2.2)."""
-    project = store.get_project(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return project
-
-
-@app.post("/projects/{project_id}/runs", response_model=RunDetail, status_code=201)
+@app.post("/projects/{project_reference}/runs", response_model=RunDetail, status_code=201)
 def create_run(
-    payload: RunCreate,
-    project_id: str = Path(..., description="Project identifier"),
+    project_reference: str = Path(
+        ..., description="Project identifier or unique name"
+    ),
     store: InMemoryStorage = Depends(get_storage),
 ) -> RunDetail:
     """Start a new training run under a project (5.2.3)."""
-    project = store.get_project(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    run = store.create_run(project_id, payload)
-    store.update_run_status(run.id, RunStatus.RUNNING, progress=0.05)
+    project = _get_project_by_reference(project_reference, store)
+    _ensure_project_assets_available(project)
+    start_command = _build_start_command(project)
+    run = store.create_run(project.id, start_command)
+    run.logs.append(
+        LogEntry(
+            timestamp=datetime.utcnow(),
+            level="INFO",
+            message=(
+                "已确认训练资源数据集 "
+                f"{project.dataset_name}，配置 {project.training_yaml_name}"
+            ),
+        )
+    )
+    try:
+        process = _launch_training_process(start_command)
+    except RuntimeError as exc:
+        run.logs.append(
+            LogEntry(
+                timestamp=datetime.utcnow(),
+                level="ERROR",
+                message=str(exc),
+            )
+        )
+        store.update_run_status(run.id, RunStatus.FAILED)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    run.logs.append(
+        LogEntry(
+            timestamp=datetime.utcnow(),
+            level="INFO",
+            message=(f"已触发训练命令：{start_command} (PID {process.pid})"),
+        )
+    )
+    run = store.update_run_status(run.id, RunStatus.RUNNING, progress=0.05)
     return run
 
 
@@ -100,46 +192,8 @@ def cancel_run(
     return store.cancel_run(run_id)
 
 
-@app.get("/projects/{project_id}/runs/{run_id}/logs", response_model=LogListResponse)
-def get_run_logs(
-    project_id: str,
-    run_id: str,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=500),
-    start_time: datetime | None = Query(None),
-    end_time: datetime | None = Query(None),
-    store: InMemoryStorage = Depends(get_storage),
-) -> LogListResponse:
-    """Fetch paginated run logs (5.2.6)."""
-    project = store.get_project(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    run = store.get_run(run_id)
-    if run is None or run.project_id != project_id:
-        raise HTTPException(status_code=404, detail="Run not found")
-    params = LogQueryParams(page=page, page_size=page_size, start_time=start_time, end_time=end_time)
-    return store.get_logs(run_id, params)
-
-
-@app.get("/projects/{project_id}/runs/{run_id}/artifacts", response_model=ArtifactListResponse)
-def get_run_artifacts(
-    project_id: str,
-    run_id: str,
-    store: InMemoryStorage = Depends(get_storage),
-) -> ArtifactListResponse:
-    """List artifacts produced by a run (5.2.7)."""
-    project = store.get_project(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    run = store.get_run(run_id)
-    if run is None or run.project_id != project_id:
-        raise HTTPException(status_code=404, detail="Run not found")
-    return store.list_artifacts(run_id)
-
-
 @app.post("/projects/{project_id}/runs/{run_id}/resume", response_model=RunDetail, status_code=201)
 def resume_run(
-    payload: RunCreate,
     project_id: str,
     run_id: str,
     source_artifact_id: str = Query(..., description="Checkpoint artifact to resume from"),
@@ -155,30 +209,29 @@ def resume_run(
     artifact = next((artifact for artifact in run.artifacts if artifact.id == source_artifact_id), None)
     if artifact is None:
         raise HTTPException(status_code=404, detail="Checkpoint artifact not found")
-    resumed_run = store.resume_run(project_id, run_id, payload, source_artifact_id)
+    _ensure_project_assets_available(project)
+    start_command = _build_start_command(project)
+    resumed_run = store.resume_run(project_id, run_id, source_artifact_id, start_command)
+    resumed_run.logs.append(
+        LogEntry(
+            timestamp=datetime.utcnow(),
+            level="INFO",
+            message=(
+                "已确认训练资源数据集 "
+                f"{project.dataset_name}，配置 {project.training_yaml_name}"
+            ),
+        )
+    )
+    resumed_run.logs.append(
+        LogEntry(
+            timestamp=datetime.utcnow(),
+            level="INFO",
+            message=(
+                f"从检查点 {source_artifact_id} 重新启动训练命令：{start_command}"
+            ),
+        )
+    )
     store.update_run_status(resumed_run.id, RunStatus.RUNNING, progress=0.05)
     return resumed_run
 
 
-@app.post(
-    "/projects/{project_id}/runs/{run_id}/artifacts/{artifact_id}/tag",
-    response_model=Artifact,
-)
-def tag_artifact(
-    payload: ArtifactTagRequest,
-    project_id: str,
-    run_id: str,
-    artifact_id: str,
-    store: InMemoryStorage = Depends(get_storage),
-) -> Artifact:
-    """Mark a checkpoint as candidate or release (5.2.9)."""
-    project = store.get_project(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    run = store.get_run(run_id)
-    if run is None or run.project_id != project_id:
-        raise HTTPException(status_code=404, detail="Run not found")
-    artifact = next((art for art in run.artifacts if art.id == artifact_id), None)
-    if artifact is None:
-        raise HTTPException(status_code=404, detail="Artifact not found")
-    return store.tag_artifact(run_id, artifact_id, payload)
