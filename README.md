@@ -111,21 +111,23 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     | `base_model` | string | 否 | 训练所基于的模型。 |
     | `owner` | string | 是 | 负责人名称或工号。 |
     | `tags` | array[string] | 否 | 自定义标签，便于分类检索。 |
-    | `default_hyperparameters` | object | 否 | 默认超参数配置，键值对形式。 |
+    | `train_method` | string | 否 | 训练方法，支持 `SFT`、`LoRA`、`RF`。 |
+    | `default_hyperparameters` | object | 否 | 默认超参数配置，键值对形式，可根据训练方法调整。 |
 
   - **示例请求体：**
     ```json
     {
-      "name": "中文摘要系统",
-      "description": "对科研文章进行自动摘要",
-      "objective": "降低阅读时间",
-      "task_type": "文本摘要",
-      "base_model": "llama-2-13b",
-      "owner": "小李",
-      "tags": ["科研", "第一阶段"],
+      "name": "印章大模型",
+      "description": "构建印章通用大模型",
+      "objective": "初版模型训练",
+      "task_type": "VL-Lora",
+      "base_model": "qwen-VL-7B",
+      "owner": "LL",
+      "tags": ["VL", "通用印章"],
+      "train_method": "SFT",
       "default_hyperparameters": {
-        "learning_rate": 3e-5,
-        "batch_size": 16
+        "learning_rate": 5e-5,
+        "batch_size": 2
       }
     }
     ```
@@ -136,6 +138,7 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     | --- | --- | --- |
     | `id` | string | 项目唯一标识，形如 `proj_xxx`。 |
     | `name` | string | 项目名称。 |
+    | `description` | string | 项目摘要。 |
     | `status` | string | 当前状态，示例：`草稿` `进行中`。 |
     | `objective` | string | 训练目标。 |
     | `task_type` | string | 任务类型。 |
@@ -144,6 +147,7 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     | `created_at` | datetime | 创建时间（ISO 8601）。 |
     | `updated_at` | datetime | 更新时间（ISO 8601）。 |
     | `tags` | array[string] | 标签列表。 |
+    | `train_method` | string | 训练方法。 |
     | `default_hyperparameters` | object | 默认超参数。 |
     | `runs` | array[object] | 与项目关联的运行列表。 |
 
@@ -151,16 +155,17 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     ```json
     {
       "id": "proj_xxx",
-      "name": "中文摘要系统",
+      "name": "印章大模型",
       "status": "草稿",
-      "objective": "降低阅读时间",
-      "task_type": "文本摘要",
-      "base_model": "llama-2-13b",
-      "owner": "小李",
+      "objective": "初版模型训练",
+      "task_type": "VL-Lora",
+      "base_model": "qwen-VL-7B",
+      "owner": "LL",
       "created_at": "2024-01-01T12:00:00Z",
       "updated_at": "2024-01-01T12:00:00Z",
-      "tags": ["科研", "第一阶段"],
-      "default_hyperparameters": {"learning_rate": 3e-5, "batch_size": 16},
+      "tags": ["VL", "通用印章"],
+      "train_method": "SFT",
+      "default_hyperparameters": {"learning_rate": 5e-5, "batch_size": 2},
       "runs": []
     }
     ```
@@ -169,16 +174,17 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
   curl -X POST "http://localhost:8000/projects" \
     -H "Content-Type: application/json" \
     -d '{
-          "name": "中文摘要系统",
-          "description": "对科研文章进行自动摘要",
-          "objective": "降低阅读时间",
-          "task_type": "文本摘要",
-          "base_model": "llama-2-13b",
-          "owner": "小李",
-          "tags": ["科研", "第一阶段"],
+          "name": "印章大模型",
+          "description": "构建印章通用大模型",
+          "objective": "初版模型训练",
+          "task_type": "VL-Lora",
+          "base_model": "qwen-VL-7B",
+          "owner": "LL",
+          "tags": ["VL", "通用印章"],
+          "train_method": "SFT",
           "default_hyperparameters": {
-            "learning_rate": 3e-5,
-            "batch_size": 16
+            "learning_rate": 5e-5,
+            "batch_size": 2
           }
         }'
   ```
