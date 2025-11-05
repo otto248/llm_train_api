@@ -111,21 +111,41 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     | `base_model` | string | 否 | 训练所基于的模型。 |
     | `owner` | string | 是 | 负责人名称或工号。 |
     | `tags` | array[string] | 否 | 自定义标签，便于分类检索。 |
-    | `default_hyperparameters` | object | 否 | 默认超参数配置，键值对形式。 |
+    | `train_method` | string | 否 | 训练方法，支持 `SFT`、`LoRA`、`RF`。 |
+    | `default_hyperparameters` | object | 否 | 不同训练方法的默认超参数配置，支持 `sft`、`lora`、`rf` 三个子对象。 |
 
   - **示例请求体：**
     ```json
     {
-      "name": "中文摘要系统",
-      "description": "对科研文章进行自动摘要",
-      "objective": "降低阅读时间",
-      "task_type": "文本摘要",
-      "base_model": "llama-2-13b",
-      "owner": "小李",
-      "tags": ["科研", "第一阶段"],
+      "name": "印章大模型",
+      "description": "构建印章通用大模型",
+      "objective": "初版模型训练",
+      "task_type": "VL-Lora",
+      "base_model": "qwen-VL-7B",
+      "owner": "LL",
+      "tags": ["VL", "通用印章"],
+      "train_method": "SFT",
       "default_hyperparameters": {
-        "learning_rate": 3e-5,
-        "batch_size": 16
+        "sft": {
+          "learning_rate": 5e-5,
+          "batch_size": 2,
+          "epochs": 3,
+          "max_seq_length": 2048
+        },
+        "lora": {
+          "learning_rate": 1e-4,
+          "rank": 8,
+          "alpha": 16,
+          "dropout": 0.1,
+          "target_modules": ["q_proj", "v_proj"]
+        },
+        "rf": {
+          "learning_rate": 5e-6,
+          "kl_coefficient": 0.1,
+          "rollout_batch_size": 8,
+          "train_batch_size": 64,
+          "reward_model": "qwen-reward-1.1"
+        }
       }
     }
     ```
@@ -136,6 +156,7 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     | --- | --- | --- |
     | `id` | string | 项目唯一标识，形如 `proj_xxx`。 |
     | `name` | string | 项目名称。 |
+    | `description` | string | 项目摘要。 |
     | `status` | string | 当前状态，示例：`草稿` `进行中`。 |
     | `objective` | string | 训练目标。 |
     | `task_type` | string | 任务类型。 |
@@ -144,6 +165,7 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     | `created_at` | datetime | 创建时间（ISO 8601）。 |
     | `updated_at` | datetime | 更新时间（ISO 8601）。 |
     | `tags` | array[string] | 标签列表。 |
+    | `train_method` | string | 训练方法。 |
     | `default_hyperparameters` | object | 默认超参数。 |
     | `runs` | array[object] | 与项目关联的运行列表。 |
 
@@ -151,16 +173,38 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
     ```json
     {
       "id": "proj_xxx",
-      "name": "中文摘要系统",
+      "name": "印章大模型",
       "status": "草稿",
-      "objective": "降低阅读时间",
-      "task_type": "文本摘要",
-      "base_model": "llama-2-13b",
-      "owner": "小李",
+      "objective": "初版模型训练",
+      "task_type": "VL-Lora",
+      "base_model": "qwen-VL-7B",
+      "owner": "LL",
       "created_at": "2024-01-01T12:00:00Z",
       "updated_at": "2024-01-01T12:00:00Z",
-      "tags": ["科研", "第一阶段"],
-      "default_hyperparameters": {"learning_rate": 3e-5, "batch_size": 16},
+      "tags": ["VL", "通用印章"],
+      "train_method": "SFT",
+      "default_hyperparameters": {
+        "sft": {
+          "learning_rate": 5e-5,
+          "batch_size": 2,
+          "epochs": 3,
+          "max_seq_length": 2048
+        },
+        "lora": {
+          "learning_rate": 1e-4,
+          "rank": 8,
+          "alpha": 16,
+          "dropout": 0.1,
+          "target_modules": ["q_proj", "v_proj"]
+        },
+        "rf": {
+          "learning_rate": 5e-6,
+          "kl_coefficient": 0.1,
+          "rollout_batch_size": 8,
+          "train_batch_size": 64,
+          "reward_model": "qwen-reward-1.1"
+        }
+      },
       "runs": []
     }
     ```
@@ -169,19 +213,58 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
   curl -X POST "http://localhost:8000/projects" \
     -H "Content-Type: application/json" \
     -d '{
-          "name": "中文摘要系统",
-          "description": "对科研文章进行自动摘要",
-          "objective": "降低阅读时间",
-          "task_type": "文本摘要",
-          "base_model": "llama-2-13b",
-          "owner": "小李",
-          "tags": ["科研", "第一阶段"],
+          "name": "印章大模型",
+          "description": "构建印章通用大模型",
+          "objective": "初版模型训练",
+          "task_type": "VL-Lora",
+          "base_model": "qwen-VL-7B",
+          "owner": "LL",
+          "tags": ["VL", "通用印章"],
+          "train_method": "SFT",
           "default_hyperparameters": {
-            "learning_rate": 3e-5,
-            "batch_size": 16
+            "sft": {
+              "learning_rate": 5e-5,
+              "batch_size": 2,
+              "epochs": 3,
+              "max_seq_length": 2048
+            },
+            "lora": {
+              "learning_rate": 1e-4,
+              "rank": 8,
+              "alpha": 16,
+              "dropout": 0.1,
+              "target_modules": ["q_proj", "v_proj"]
+            },
+            "rf": {
+              "learning_rate": 5e-6,
+              "kl_coefficient": 0.1,
+              "rollout_batch_size": 8,
+              "train_batch_size": 64,
+              "reward_model": "qwen-reward-1.1"
+            }
           }
         }'
   ```
+
+#### 训练方法超参数字段说明
+
+- **SFT (`default_hyperparameters.sft`)**
+  - `learning_rate`：监督微调的学习率。
+  - `batch_size`：每次梯度更新的批量大小。
+  - `epochs`：训练轮数。
+  - `max_seq_length`：可选，输入序列最大长度。
+- **LoRA (`default_hyperparameters.lora`)**
+  - `learning_rate`：LoRA 适配器的学习率。
+  - `rank`：LoRA 低秩分解的秩。
+  - `alpha`：LoRA 缩放系数。
+  - `dropout`：适配器 dropout 概率。
+  - `target_modules`：注入 LoRA 适配器的模块名称列表。
+- **RF (`default_hyperparameters.rf`)**
+  - `learning_rate`：强化微调阶段的学习率。
+  - `kl_coefficient`：KL 惩罚系数。
+  - `rollout_batch_size`：收集 rollout 时的批量大小。
+  - `train_batch_size`：PPO 更新的批量大小。
+  - `reward_model`：用于打分的奖励模型标识。
 
 ### 列出项目
 - **方法与路径：** `GET /projects`
@@ -248,7 +331,27 @@ OpenAPI/Swagger UI 可通过 <http://localhost:8000/docs> 访问。你也可以�
       "created_at": "2024-01-01T12:00:00Z",
       "updated_at": "2024-01-02T09:30:00Z",
       "tags": ["科研", "第一阶段"],
-      "default_hyperparameters": {"learning_rate": 3e-5, "batch_size": 16},
+      "default_hyperparameters": {
+        "sft": {
+          "learning_rate": 3e-5,
+          "batch_size": 16,
+          "epochs": 5
+        },
+        "lora": {
+          "learning_rate": 1.5e-4,
+          "rank": 16,
+          "alpha": 32,
+          "dropout": 0.05,
+          "target_modules": ["q_proj", "k_proj", "v_proj"]
+        },
+        "rf": {
+          "learning_rate": 1e-6,
+          "kl_coefficient": 0.15,
+          "rollout_batch_size": 16,
+          "train_batch_size": 128,
+          "reward_model": "reward-model-1.0"
+        }
+      },
       "runs": [
         {
           "id": "run_001",

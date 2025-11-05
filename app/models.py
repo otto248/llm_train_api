@@ -21,6 +21,63 @@ class RunStatus(str, Enum):
     PAUSED = "paused"
 
 
+class TrainMethod(str, Enum):
+    SFT = "SFT"
+    LORA = "LoRA"
+    RF = "RF"
+
+
+class SFTHyperParameters(BaseModel):
+    learning_rate: float = Field(..., gt=0, description="Learning rate used for supervised fine-tuning")
+    batch_size: int = Field(..., gt=0, description="Batch size for gradient updates")
+    epochs: int = Field(..., gt=0, description="Number of epochs for supervised training")
+    max_seq_length: Optional[int] = Field(
+        None,
+        gt=0,
+        description="Optional maximum sequence length for tokenization",
+    )
+
+
+class LoRAHyperParameters(BaseModel):
+    learning_rate: float = Field(..., gt=0, description="Learning rate for LoRA adapters")
+    rank: int = Field(..., gt=0, description="LoRA rank controlling adapter capacity")
+    alpha: int = Field(..., gt=0, description="Scaling factor applied to the LoRA updates")
+    dropout: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Dropout probability applied to LoRA adapters",
+    )
+    target_modules: List[str] = Field(
+        default_factory=list,
+        description="List of module names where LoRA adapters are injected",
+    )
+
+
+class RFHyperParameters(BaseModel):
+    learning_rate: float = Field(..., gt=0, description="Learning rate for reinforcement fine-tuning")
+    kl_coefficient: float = Field(..., gt=0, description="KL penalty coefficient for PPO updates")
+    rollout_batch_size: int = Field(
+        ..., gt=0, description="Batch size used when collecting rollouts"
+    )
+    train_batch_size: int = Field(..., gt=0, description="Batch size for PPO optimizer updates")
+    reward_model: str = Field(..., description="Identifier of the reward model used for scoring")
+
+
+class TrainMethodHyperParameters(BaseModel):
+    sft: Optional[SFTHyperParameters] = Field(
+        default=None,
+        description="Default hyperparameters applied when using supervised fine-tuning",
+    )
+    lora: Optional[LoRAHyperParameters] = Field(
+        default=None, description="Default hyperparameters applied when using LoRA"
+    )
+    rf: Optional[RFHyperParameters] = Field(
+        default=None,
+        description="Default hyperparameters applied when using reinforcement fine-tuning",
+    )
+
+
 class RunResourceConfig(BaseModel):
     nodes: int = Field(..., ge=1, description="Number of compute nodes to allocate")
     gpus_per_node: int = Field(..., ge=0, description="Number of GPUs per node")
@@ -46,11 +103,19 @@ class RunConfig(BaseModel):
 
 class ProjectCreate(BaseModel):
     name: str
+    description: Optional[str] = None
     objective: str
     task_type: str
     base_model: str
     owner: str
     tags: List[str] = Field(default_factory=list)
+    train_method: TrainMethod = Field(
+        default=TrainMethod.SFT, description="Training methodology, e.g. SFT, LoRA, or RF"
+    )
+    default_hyperparameters: TrainMethodHyperParameters = Field(
+        default_factory=TrainMethodHyperParameters,
+        description="Default hyperparameter configuration grouped by training method",
+    )
 
 
 class Project(ProjectCreate):
