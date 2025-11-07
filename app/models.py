@@ -8,13 +8,13 @@ from pydantic import BaseModel, Field
 
 
 class ProjectStatus(str, Enum):
-    """Lifecycle states that a project can be in within the training platform."""
+    """描述训练平台中项目生命周期的枚举，用于限定项目状态字段。"""
     ACTIVE = "active"
     ARCHIVED = "archived"
 
 
 class RunStatus(str, Enum):
-    """Enumeration of the supported lifecycle states for a training run."""
+    """列举训练任务支持的各个生命周期状态，驱动运行状态机。"""
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -24,7 +24,7 @@ class RunStatus(str, Enum):
 
 
 class ProjectCreate(BaseModel):
-    """Request model used when creating a new project via the public API."""
+    """创建项目时使用的请求体模型，约束必填字段与基础信息。"""
     name: str
     description: Optional[str] = None
     owner: str
@@ -38,7 +38,7 @@ class ProjectCreate(BaseModel):
 
 
 class Project(ProjectCreate):
-    """Read model for project summaries returned from list/detail endpoints."""
+    """项目概要响应模型，承载列表与详情接口返回的只读信息。"""
     id: str
     status: ProjectStatus = ProjectStatus.ACTIVE
     created_at: datetime
@@ -47,14 +47,14 @@ class Project(ProjectCreate):
 
 
 class LogEntry(BaseModel):
-    """Structured representation of a single log line emitted by a run."""
+    """运行过程中输出的单条日志结构化记录，包含时间与级别。"""
     timestamp: datetime
     level: str
     message: str
 
 
 class Artifact(BaseModel):
-    """Metadata describing an artifact generated during a training run."""
+    """训练运行生成的工件元数据模型，用于标识文件及标签信息。"""
     id: str
     name: str
     type: str
@@ -64,7 +64,7 @@ class Artifact(BaseModel):
 
 
 class Run(BaseModel):
-    """Primary data model for tracking an individual training run's state."""
+    """记录单次训练运行状态与关联信息的核心数据模型。"""
     id: str
     project_id: str
     status: RunStatus
@@ -81,14 +81,14 @@ class Run(BaseModel):
 
 
 class RunStatusUpdate(BaseModel):
-    """Partial update payload allowed when mutating a run's status or metrics."""
+    """更新运行状态或进度时使用的部分更新模型，限制可修改字段。"""
     status: RunStatus
     progress: Optional[float] = None
     metrics: Optional[Dict[str, float]] = None
 
 
 class LogQueryParams(BaseModel):
-    """Pagination and filtering parameters accepted when listing run logs."""
+    """查询运行日志时支持的分页与时间过滤参数模型。"""
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=50, ge=1, le=500)
     start_time: Optional[datetime] = None
@@ -96,18 +96,18 @@ class LogQueryParams(BaseModel):
 
 
 class ArtifactTagRequest(BaseModel):
-    """Request payload for tagging an existing artifact with a new label."""
+    """为已有工件追加标签时使用的请求体模型。"""
     tag: str = Field(..., description="Tag to apply to the artifact")
 
 
 class ArtifactListResponse(BaseModel):
-    """Response envelope returned when listing artifacts for a run."""
+    """列出运行工件时返回的响应封装，包含运行标识和工件集合。"""
     run_id: str
     artifacts: List[Artifact]
 
 
 class LogListResponse(BaseModel):
-    """Response envelope containing paginated log entries for a run."""
+    """返回运行日志列表的响应模型，携带分页信息与日志条目。"""
     run_id: str
     total: int
     page: int
@@ -116,9 +116,9 @@ class LogListResponse(BaseModel):
 
 
 class ProjectDetail(Project):
-    """Extended project representation that includes detailed run information."""
+    """在项目概要基础上补充运行列表的详细项目模型。"""
     runs: List[Run] = Field(default_factory=list)
 
 
 class RunDetail(Run):
-    """Alias of :class:`Run` reserved for future expansion of run details."""
+    """与 `Run` 相同的运行详情模型，为未来扩展保留命名空间。"""
