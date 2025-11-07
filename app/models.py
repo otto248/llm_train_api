@@ -8,11 +8,13 @@ from pydantic import BaseModel, Field
 
 
 class ProjectStatus(str, Enum):
+    """Lifecycle states that a project can be in within the training platform."""
     ACTIVE = "active"
     ARCHIVED = "archived"
 
 
 class RunStatus(str, Enum):
+    """Enumeration of the supported lifecycle states for a training run."""
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -22,6 +24,7 @@ class RunStatus(str, Enum):
 
 
 class ProjectCreate(BaseModel):
+    """Request model used when creating a new project via the public API."""
     name: str
     description: Optional[str] = None
     owner: str
@@ -35,6 +38,7 @@ class ProjectCreate(BaseModel):
 
 
 class Project(ProjectCreate):
+    """Read model for project summaries returned from list/detail endpoints."""
     id: str
     status: ProjectStatus = ProjectStatus.ACTIVE
     created_at: datetime
@@ -43,12 +47,14 @@ class Project(ProjectCreate):
 
 
 class LogEntry(BaseModel):
+    """Structured representation of a single log line emitted by a run."""
     timestamp: datetime
     level: str
     message: str
 
 
 class Artifact(BaseModel):
+    """Metadata describing an artifact generated during a training run."""
     id: str
     name: str
     type: str
@@ -58,6 +64,7 @@ class Artifact(BaseModel):
 
 
 class Run(BaseModel):
+    """Primary data model for tracking an individual training run's state."""
     id: str
     project_id: str
     status: RunStatus
@@ -74,12 +81,14 @@ class Run(BaseModel):
 
 
 class RunStatusUpdate(BaseModel):
+    """Partial update payload allowed when mutating a run's status or metrics."""
     status: RunStatus
     progress: Optional[float] = None
     metrics: Optional[Dict[str, float]] = None
 
 
 class LogQueryParams(BaseModel):
+    """Pagination and filtering parameters accepted when listing run logs."""
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=50, ge=1, le=500)
     start_time: Optional[datetime] = None
@@ -87,15 +96,18 @@ class LogQueryParams(BaseModel):
 
 
 class ArtifactTagRequest(BaseModel):
+    """Request payload for tagging an existing artifact with a new label."""
     tag: str = Field(..., description="Tag to apply to the artifact")
 
 
 class ArtifactListResponse(BaseModel):
+    """Response envelope returned when listing artifacts for a run."""
     run_id: str
     artifacts: List[Artifact]
 
 
 class LogListResponse(BaseModel):
+    """Response envelope containing paginated log entries for a run."""
     run_id: str
     total: int
     page: int
@@ -104,8 +116,9 @@ class LogListResponse(BaseModel):
 
 
 class ProjectDetail(Project):
+    """Extended project representation that includes detailed run information."""
     runs: List[Run] = Field(default_factory=list)
 
 
 class RunDetail(Run):
-    pass
+    """Alias of :class:`Run` reserved for future expansion of run details."""
