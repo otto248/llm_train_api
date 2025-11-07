@@ -32,7 +32,7 @@ _HOST_TRAINING_PATH = PathlibPath(_HOST_TRAINING_DIR).resolve()
 
 
 def _launch_training_process(start_command: str) -> subprocess.Popen[bytes]:
-    """Kick off the remote training command inside the target Docker container."""
+    """在目标 Docker 容器内启动远程训练命令。"""
 
     docker_command = (
         f"cd {_HOST_TRAINING_DIR} && "
@@ -103,14 +103,14 @@ def _ensure_project_assets_available(project: ProjectDetail) -> None:
 
 @app.post("/projects", response_model=ProjectDetail, status_code=201)
 def create_project(payload: ProjectCreate, store: InMemoryStorage = Depends(get_storage)) -> ProjectDetail:
-    """Create a new training project (5.2.1)."""
+    """创建新的训练项目（功能点 5.2.1）。"""
     project = store.create_project(payload)
     return project
 
 
 @app.get("/projects", response_model=List[Project])
 def list_projects(store: InMemoryStorage = Depends(get_storage)) -> List[Project]:
-    """List all training projects."""
+    """列出所有训练项目。"""
     return list(store.list_projects())
 
 
@@ -121,7 +121,7 @@ def create_run(
     ),
     store: InMemoryStorage = Depends(get_storage),
 ) -> RunDetail:
-    """Start a new training run under a project (5.2.3)."""
+    """在指定项目下启动新的训练运行（功能点 5.2.3）。"""
     project = _get_project_by_reference(project_reference, store)
     _ensure_project_assets_available(project)
     start_command = _build_start_command(project)
