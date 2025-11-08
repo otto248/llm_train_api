@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from datetime import datetime
 import logging
+import shlex
 import subprocess
-from typing import List
 from pathlib import Path as PathlibPath
+from typing import List
 
-from fastapi import Depends, FastAPI, HTTPException, Path as PathParam
+from fastapi import Body, Depends, FastAPI, HTTPException, Path as PathParam
 
 from .models import (
+    ContainerFileRequest,
+    ContainerFileResponse,
     LogEntry,
     Project,
     ProjectCreate,
@@ -26,6 +29,10 @@ logger = logging.getLogger(__name__)
 _HOST_TRAINING_DIR = "/data1/qwen2.5-14bxxxx"
 _DOCKER_CONTAINER_NAME = "qwen2.5-14b-instruct_xpytorch_full_sft"
 _DOCKER_WORKING_DIR = "KTIP_Release_2.1.0/train/llm"
+
+_CONTAINER_FILE_TARGET_DIR = "/mnt/disk"
+_CONTAINER_FILE_CONTENT = "cym"
+_LOCAL_DOCKER_CONTAINER_NAME = "mycontainer"
 
 
 _HOST_TRAINING_PATH = PathlibPath(_HOST_TRAINING_DIR).resolve()
@@ -53,6 +60,32 @@ def _launch_training_process(start_command: str) -> subprocess.Popen[bytes]:
     return process
 
 
+def _run_container_command(container_name: str, command: str) -> None:
+    docker_command = [
+        "docker",
+        "exec",
+        "-i",
+        container_name,
+        "bash",
+        "-lc",
+        command,
+    ]
+    result = subprocess.run(  # noqa: S603, S607 - intentional command execution
+        docker_command,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        logger.error(
+            "Failed to run command in container %s: %s", container_name, stderr
+        )
+        raise RuntimeError(
+            f"无法在容器 {container_name} 中执行命令：{stderr or '未知错误'}"
+        )
+
+
 def get_storage() -> DatabaseStorage:
     return storage
 
@@ -73,6 +106,24 @@ def _resolve_project_asset(relative_path: str) -> PathlibPath:
             ),
         ) from exc
     return candidate
+
+
+def _create_file_in_container(filename: str) -> str:
+    sanitized = PathlibPath(filename).name
+    if sanitized != filename:
+        raise HTTPException(status_code=400, detail="文件名非法，仅允许提供文件名。")
+    if sanitized in {"", ".", ".."}:
+        raise HTTPException(status_code=400, detail="文件名不能为空或特殊目录。")
+    target_path = f"{_CONTAINER_FILE_TARGET_DIR}/{sanitized}"
+    shell_command = (
+        f"mkdir -p {_CONTAINER_FILE_TARGET_DIR} && "
+        f"printf %s {shlex.quote(_CONTAINER_FILE_CONTENT)} > {shlex.quote(target_path)}"
+    )
+    try:
+        _run_container_command(_LOCAL_DOCKER_CONTAINER_NAME, shell_command)
+    except RuntimeError as exc:  # pragma: no cover - depends on runtime environment
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return target_path
 
 
 def _get_project_by_reference(
@@ -167,5 +218,19 @@ def create_run(
     )
     run = store.update_run_status(run.id, RunStatus.RUNNING, progress=0.05)
     return run
+
+
+@app.post(
+    "/containers/mycontainer/files",
+    response_model=ContainerFileResponse,
+    status_code=201,
+)
+def create_container_file(
+    payload: ContainerFileRequest = Body(ContainerFileRequest()),
+) -> ContainerFileResponse:
+    """在指定容器的 /mnt/disk 目录下创建文件并写入固定内容。"""
+
+    file_path = _create_file_in_container(payload.filename)
+    return ContainerFileResponse(path=file_path, content=_CONTAINER_FILE_CONTENT)
 
 
