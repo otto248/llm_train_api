@@ -39,7 +39,10 @@ from .models import (
 )
 
 
-_DEFAULT_DB_URL = os.getenv("TRAINING_DB_URL", "sqlite:///./training.db")
+_DEFAULT_DB_URL = os.getenv(
+    "TRAINING_DB_URL",
+    "postgresql+psycopg://app:secret123@localhost:5432/appdb",
+)
 
 
 metadata = MetaData()
@@ -148,7 +151,9 @@ class DatabaseStorage:
         """初始化数据库连接并确保基础表结构存在。"""
 
         self._database_url = database_url or _DEFAULT_DB_URL
-        self._engine: Engine = create_engine(self._database_url, future=True)
+        self._engine: Engine = create_engine(
+            self._database_url, future=True, pool_pre_ping=True
+        )
         metadata.create_all(self._engine)
 
     # ------------------------------------------------------------------
