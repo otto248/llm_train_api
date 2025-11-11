@@ -6,11 +6,12 @@ from datetime import datetime, timezone
 import logging
 from typing import Any, Dict
 
-from fastapi import APIRouter, FastAPI, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, FastAPI, File, HTTPException, UploadFile
 
 from app.config import MAX_YAML_BYTES
+from app.deps import get_storage
 from src.schemas import OperationAction, OperationStatus, OperationTargetType
-from src.services.data_store import storage
+from src.services.data_store import DatabaseStorage
 from src.utils.storage import (
     delete_train_config_metadata,
     load_train_config_metadata,
@@ -23,7 +24,10 @@ logger = logging.getLogger(__name__)
 
 
 @router.put("")
-async def upload_train_config(file: UploadFile = File(...)) -> Dict[str, Any]:
+async def upload_train_config(
+    file: UploadFile = File(...),
+    store: DatabaseStorage = Depends(get_storage),
+) -> Dict[str, Any]:
     """上传训练配置文件并记录元数据。"""
 
     if not (file.filename.endswith(".yaml") or file.filename.endswith(".yml")):
@@ -44,7 +48,7 @@ async def upload_train_config(file: UploadFile = File(...)) -> Dict[str, Any]:
         "size": len(content),
     }
     save_train_config_metadata(metadata)
-    storage.record_operation(
+    store.record_operation(
         action=OperationAction.UPLOAD_TRAIN_CONFIG,
         target_type=OperationTargetType.TRAIN_CONFIG,
         target_id=file.filename,
@@ -66,7 +70,9 @@ def get_train_config() -> Dict[str, Any]:
 
 
 @router.delete("")
-def delete_train_config() -> Dict[str, str]:
+def delete_train_config(
+    store: DatabaseStorage = Depends(get_storage),
+) -> Dict[str, str]:
     """删除训练配置文件及元数据，并记录操作结果。"""
 
     config_path = train_config_path()
@@ -80,7 +86,7 @@ def delete_train_config() -> Dict[str, str]:
             logger.warning("Failed to remove train config %s: %s", config_path, exc)
     delete_train_config_metadata()
     if removal_error is not None:
-        storage.record_operation(
+        store.record_operation(
             action=OperationAction.DELETE_TRAIN_CONFIG,
             target_type=OperationTargetType.TRAIN_CONFIG,
             target_id=config_path.name,
@@ -89,7 +95,7 @@ def delete_train_config() -> Dict[str, str]:
             extra={"file_was_present": file_was_present},
         )
     else:
-        storage.record_operation(
+        store.record_operation(
             action=OperationAction.DELETE_TRAIN_CONFIG,
             target_type=OperationTargetType.TRAIN_CONFIG,
             target_id=config_path.name,

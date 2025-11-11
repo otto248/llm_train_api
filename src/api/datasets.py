@@ -8,9 +8,10 @@ import logging
 import uuid
 from typing import Any, Dict
 
-from fastapi import APIRouter, FastAPI, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, FastAPI, File, HTTPException, UploadFile
 
 from app.config import MAX_SMALL_FILE_BYTES
+from app.deps import get_storage
 from src.schemas import (
     DatasetCreateRequest,
     DatasetRecord,
@@ -18,7 +19,7 @@ from src.schemas import (
     OperationStatus,
     OperationTargetType,
 )
-from src.services.data_store import storage
+from src.services.data_store import DatabaseStorage
 from src.utils.storage import (
     FILES_DIR,
     UPLOADS_DIR,
@@ -35,7 +36,10 @@ logger = logging.getLogger(__name__)
 
 
 @dataset_router.post("")
-def create_dataset(req: DatasetCreateRequest) -> Dict[str, str]:
+def create_dataset(
+    req: DatasetCreateRequest,
+    store: DatabaseStorage = Depends(get_storage),
+) -> Dict[str, str]:
     """创建新的数据集元数据并记录操作日志。"""
 
     dataset_id = str(uuid.uuid4())
@@ -55,7 +59,7 @@ def create_dataset(req: DatasetCreateRequest) -> Dict[str, str]:
     record_dict["metadata"] = record_dict.get("metadata") or {}
     record_dict.setdefault("train_config", None)
     save_dataset_record(record_dict)
-    storage.record_operation(
+    store.record_operation(
         action=OperationAction.CREATE_DATASET,
         target_type=OperationTargetType.DATASET,
         target_id=dataset_id,
@@ -84,7 +88,11 @@ def get_dataset(dataset_id: str) -> Dict[str, Any]:
 
 
 @dataset_router.put("/{dataset_id}/files")
-async def upload_small_file(dataset_id: str, file: UploadFile = File(...)) -> Dict[str, Any]:
+async def upload_small_file(
+    dataset_id: str,
+    file: UploadFile = File(...),
+    store: DatabaseStorage = Depends(get_storage),
+) -> Dict[str, Any]:
     """上传小文件到数据集并更新文件记录与上传日志。"""
 
     try:
@@ -125,7 +133,7 @@ async def upload_small_file(dataset_id: str, file: UploadFile = File(...)) -> Di
     record.setdefault("files", []).append(file_entry)
     record["status"] = "ready"
     save_dataset_record(record)
-    storage.record_operation(
+    store.record_operation(
         action=OperationAction.UPLOAD_DATASET_FILE,
         target_type=OperationTargetType.DATASET_FILE,
         target_id=upload_id,
@@ -146,7 +154,9 @@ async def upload_small_file(dataset_id: str, file: UploadFile = File(...)) -> Di
 
 
 @upload_router.delete("/{upload_id}")
-def abort_upload(upload_id: str) -> Dict[str, str]:
+def abort_upload(
+    upload_id: str, store: DatabaseStorage = Depends(get_storage)
+) -> Dict[str, str]:
     """终止尚未完成的上传会话并清理相关文件。"""
 
     upload_meta_path = UPLOADS_DIR / f"{upload_id}.json"
@@ -161,7 +171,7 @@ def abort_upload(upload_id: str) -> Dict[str, str]:
             removal_failed: OSError | None = None
             try:
                 file_path.unlink()
-                storage.record_operation(
+                store.record_operation(
                     action=OperationAction.DELETE_DATASET_FILE,
                     target_type=OperationTargetType.DATASET_FILE,
                     target_id=upload_id,
@@ -175,7 +185,7 @@ def abort_upload(upload_id: str) -> Dict[str, str]:
             except OSError as exc:  # pragma: no cover - defensive cleanup
                 removal_failed = exc
             if removal_failed is not None:
-                storage.record_operation(
+                store.record_operation(
                     action=OperationAction.DELETE_DATASET_FILE,
                     target_type=OperationTargetType.DATASET_FILE,
                     target_id=upload_id,
@@ -205,10 +215,10 @@ def abort_upload(upload_id: str) -> Dict[str, str]:
             ]
             if len(record["files"]) != original_len:
                 save_dataset_record(record)
-    storage.record_operation(
-        action=OperationAction.ABORT_UPLOAD,
-        target_type=OperationTargetType.UPLOAD_SESSION,
-        target_id=upload_id,
+        store.record_operation(
+            action=OperationAction.ABORT_UPLOAD,
+            target_type=OperationTargetType.UPLOAD_SESSION,
+            target_id=upload_id,
         status=OperationStatus.SUCCESS,
         detail="Upload aborted",
         extra={
