@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -139,3 +139,52 @@ class ContainerFileResponse(BaseModel):
 
     path: str = Field(..., description="容器内创建文件的绝对路径")
     content: str = Field(..., description="写入文件的内容")
+
+
+class DeidRequestOptions(BaseModel):
+    """脱敏请求的可选配置项，控制本地化、输出格式等参数。"""
+
+    locale: Optional[str] = "zh-CN"
+    format: Optional[str] = "text"
+    return_mapping: Optional[bool] = False
+    seed: Optional[int] = None
+
+
+class DeidRequest(BaseModel):
+    """发起脱敏任务时的请求体模型，包含文本和策略信息。"""
+
+    policy_id: Optional[str] = "default"
+    text: List[str]
+    options: Optional[DeidRequestOptions] = DeidRequestOptions()
+
+
+class DeidResponse(BaseModel):
+    """脱敏接口返回的数据结构，包含处理后的文本与映射信息。"""
+
+    deidentified: List[str]
+    mapping: Optional[List[Dict[str, str]]] = None
+    policy_version: str
+
+
+class DatasetCreateRequest(BaseModel):
+    """创建数据集时提交的请求体模型。"""
+
+    name: str
+    dtype: Optional[str] = Field(None, alias="type")
+    source: Optional[str] = None
+    task_type: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class DatasetRecord(BaseModel):
+    """描述数据集信息的响应模型。"""
+
+    id: str
+    name: str
+    type: Optional[str] = None
+    source: Optional[str] = None
+    task_type: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    created_at: str
+    status: str
+    files: List[Dict[str, Any]] = Field(default_factory=list)
