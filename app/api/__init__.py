@@ -1,17 +1,19 @@
-"""FastAPI router registration."""
+"""API registration helpers exposed at the package level."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from .dataset_upload import register_routes as register_dataset_routes
+from .deid import register_routes as register_deid_routes
+from .deployment import register_routes as register_deployment_routes
+from .health import register_routes as register_health_routes
+from .project import register_routes as register_project_routes
+from .train_config import register_routes as register_train_config_routes
 
-from . import dataset_upload, deid, deployment, health, project, train_config
-
-api_router = APIRouter()
-api_router.include_router(project.router)
-api_router.include_router(deid.router)
-api_router.include_router(deployment.router)
-api_router.include_router(dataset_upload.router)
-api_router.include_router(train_config.router)
-api_router.include_router(health.router)
-
-__all__ = ["api_router"]
+__all__ = [
+    "register_dataset_routes",
+    "register_deid_routes",
+    "register_deployment_routes",
+    "register_health_routes",
+    "register_project_routes",
+    "register_train_config_routes",
+]

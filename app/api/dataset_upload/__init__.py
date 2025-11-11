@@ -8,7 +8,7 @@ import logging
 import uuid
 from typing import Any, Dict
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, FastAPI, File, HTTPException, UploadFile
 
 from ...config import MAX_SMALL_FILE_BYTES
 from ...models import (
@@ -216,4 +216,11 @@ def abort_upload(upload_id: str) -> Dict[str, str]:
 router.include_router(dataset_router)
 router.include_router(upload_router)
 
-__all__ = ["router"]
+
+def register_routes(app: FastAPI) -> None:
+    """Register dataset and upload endpoints on the provided application."""
+
+    app.include_router(router)
+
+
+__all__ = ["router", "register_routes"]

@@ -12,7 +12,7 @@ from threading import Lock
 from typing import Any, Dict, List, Optional
 
 import requests
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
 DEFAULT_HEALTH_PATH = "/health"
@@ -425,3 +425,9 @@ def list_deployments(
                 continue
             response.append(DeploymentInfo(**record))
     return response
+
+
+def register_routes(app: FastAPI) -> None:
+    """Register deployment management endpoints on the provided application."""
+
+    app.include_router(router)

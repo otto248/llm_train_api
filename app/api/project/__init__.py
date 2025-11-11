@@ -7,7 +7,7 @@ import logging
 from pathlib import Path as PathlibPath
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Path as PathParam
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path as PathParam
 
 from ...config import (
     DOCKER_CONTAINER_NAME,
@@ -145,3 +145,9 @@ def create_run(
     )
     run = store.update_run_status(run.id, RunStatus.RUNNING, progress=0.05)
     return run
+
+
+def register_routes(app: FastAPI) -> None:
+    """Register project-related endpoints on the provided application."""
+
+    app.include_router(router)

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import logging
 from typing import Any, Dict
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, FastAPI, File, HTTPException, UploadFile
 
 from ..config import MAX_YAML_BYTES
 from ..models import OperationAction, OperationStatus, OperationTargetType
@@ -98,3 +98,12 @@ def delete_train_config() -> Dict[str, str]:
             extra={"file_was_present": file_was_present},
         )
     return {"status": "train_config_deleted"}
+
+
+def register_routes(app: FastAPI) -> None:
+    """Register training configuration endpoints on the provided application."""
+
+    app.include_router(router)
+
+
+__all__ = ["router", "register_routes"]
