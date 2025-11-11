@@ -1,7 +1,63 @@
 # LLM 训练管理 API
 
-一个基于 FastAPI 的轻量级服务，用于集中管理大模型训练项目并触发运行命令。服务通过结构化的“项目”“运行”“日志”“工件”模型，帮助训练平台快速搭建统一的编排层，便于与现有的训练脚本或调度系统集成。
+一个基于 FastAPI 的轻量级服务，用于集中管理大模型训练项目、数据集上传、训练配置文件以及模型部署流程。服务将业务按功能域拆分，配合清晰的目录结构，便于多人协作与扩展。
 
+## 项目结构
+```
+fastapi-app/
+├─ app/
+│  ├─ __init__.py          # 暴露 FastAPI app 与工厂方法
+│  ├─ main.py              # 创建 FastAPI 实例并自动注册路由
+│  ├─ config.py            # 全局配置（目录、策略等常量）
+│  ├─ deps.py              # FastAPI 依赖定义（数据库、服务）
+│  └─ logging.py           # 日志初始化
+│
+├─ src/
+│  ├─ api/                 # 各功能域对外暴露的路由
+│  │  ├─ __init__.py       # 统一注册所有路由模块
+│  │  ├─ datasets.py       # 数据集与文件上传接口
+│  │  ├─ deployments.py    # 模型部署生命周期管理
+│  │  ├─ deidentify.py     # 文本脱敏接口
+│  │  ├─ health.py         # 健康检查
+│  │  ├─ projects.py       # 训练项目与运行管理
+│  │  └─ train_configs.py  # 训练配置上传与清理
+│  │
+│  ├─ schemas/             # Pydantic 数据结构
+│  │  └─ __init__.py
+│  │
+│  ├─ db/                  # SQLAlchemy 元数据与表定义
+│  │  ├─ __init__.py
+│  │  ├─ base.py
+│  │  ├─ models.py
+│  │  └─ session.py
+│  │
+│  ├─ services/            # 业务服务/仓储实现
+│  │  ├─ __init__.py
+│  │  ├─ data_store.py
+│  │  └─ deidentify_service.py
+│  │
+│  └─ utils/               # 通用工具
+│     ├─ __init__.py
+│     └─ storage.py        # 本地文件与容器命令辅助
+│
+├─ main.py                 # 兼容入口，导出 app
+├─ requirements.txt
+└─ README.md
+```
+
+## 核心能力
+- **项目管理**：`src/api/projects.py` 暴露项目创建、列表与运行管理接口；`src/services/data_store.py` 通过 SQLAlchemy 维护项目、运行、日志与工件数据。
+- **数据集与配置上传**：`src/api/datasets.py` 管理数据集元数据、小文件上传；`src/api/train_configs.py` 负责训练配置 YAML 的上传、查询和删除。
+- **部署管理**：`src/api/deployments.py` 以进程方式管理 vLLM 模型服务，支持查询、健康检查以及强制下线。
+- **文本脱敏**：`src/api/deidentify.py` 与 `src/services/deidentify_service.py` 提供策略化的脱敏实现，可根据策略 ID 扩展。
+- **健康检查**：`src/api/health.py` 提供对外与内部的健康探针，兼容部署管理模块使用的 `_internal/health` 接口。
+
+## 快速开始
+1. 安装依赖：`pip install -r requirements.txt`
+2. 启动服务：`uvicorn main:app --reload`
+3. 使用 `http://localhost:8000/docs` 查看交互式文档。
+
+## 主要接口示例
 ## 项目结构
 ```
 fastapi-app/
@@ -55,151 +111,61 @@ fastapi-app/
 ### 创建项目
 - **方法/路径**：`POST /projects`
 - **请求体**：`ProjectCreate`
-
-```json
-{
-  "name": "qwen-finetune",
-  "description": "微调 Qwen 以适配客服场景",
-  "owner": "alice",
-  "tags": ["demo", "customer-service"],
-  "dataset_name": "datasets/qwen_demo.jsonl",
-  "training_yaml_name": "configs/qwen_demo.yaml"
-}
-```
-
 - **响应体**：`ProjectDetail`
-
-```json
-{
-  "id": "6f8c7d52-33c4-4d76-9371-5dfd5fcd521a",
-  "name": "qwen-finetune",
-  "description": "微调 Qwen 以适配客服场景",
-  "owner": "alice",
-  "tags": ["demo", "customer-service"],
-  "dataset_name": "datasets/qwen_demo.jsonl",
-  "training_yaml_name": "configs/qwen_demo.yaml",
-  "status": "active",
-  "created_at": "2024-04-12T08:45:09.192384",
-  "updated_at": "2024-04-12T08:45:09.192384",
-  "runs_started": 0,
-  "runs": []
-}
-```
-
-- **`curl` 示例**
 
 ```bash
 curl -X POST "http://localhost:8000/projects" \
   -H "Content-Type: application/json" \
   -d '{
-        "name": "qwen-finetune",
-        "description": "微调 Qwen 以适配客服场景",
+        "name": "demo-project",
+        "description": "微调示例",
         "owner": "alice",
-        "tags": ["demo", "customer-service"],
-        "dataset_name": "datasets/qwen_demo.jsonl",
-        "training_yaml_name": "configs/qwen_demo.yaml"
+        "tags": ["demo"],
+        "dataset_name": "datasets/sample.jsonl",
+        "training_yaml_name": "configs/train.yaml"
       }'
 ```
 
-### 列出项目
-- **方法/路径**：`GET /projects`
-- **请求参数**：无
-- **响应体**：`Project` 数组
-
-```json
-[
-  {
-    "id": "6f8c7d52-33c4-4d76-9371-5dfd5fcd521a",
-    "name": "qwen-finetune",
-    "description": "微调 Qwen 以适配客服场景",
-    "owner": "alice",
-    "tags": ["demo", "customer-service"],
-    "dataset_name": "datasets/qwen_demo.jsonl",
-    "training_yaml_name": "configs/qwen_demo.yaml",
-    "status": "active",
-    "created_at": "2024-04-12T08:45:09.192384",
-    "updated_at": "2024-04-12T08:45:09.192384",
-    "runs_started": 1
-  }
-]
-```
-
-- **`curl` 示例**
+### 上传数据集文件
+- **方法/路径**：`PUT /v1/datasets/{dataset_id}/files`
+- **请求体**：`multipart/form-data`
+- **响应体**：上传元数据（包含 `upload_id`、大小等信息）
 
 ```bash
-curl "http://localhost:8000/projects"
+curl -X PUT "http://localhost:8000/v1/datasets/{dataset_id}/files" \
+  -F "file=@sample.jsonl"
 ```
 
-### 创建训练运行
-- **方法/路径**：`POST /projects/{project_reference}/runs`
-- **路径参数**：`project_reference`（项目 ID 或项目名称）
-- **请求体**：无
-- **响应体**：`RunDetail`
-
-```json
-{
-  "id": "5fd396ac-30a4-4eaf-a6b3-81f5b5859377",
-  "project_id": "6f8c7d52-33c4-4d76-9371-5dfd5fcd521a",
-  "status": "running",
-  "created_at": "2024-04-12T08:47:12.508933",
-  "updated_at": "2024-04-12T08:47:12.773520",
-  "started_at": "2024-04-12T08:47:12.773512",
-  "completed_at": null,
-  "progress": 0.05,
-  "metrics": {},
-  "start_command": "bash run_train_full_sft.sh configs/qwen_demo.yaml",
-  "artifacts": [],
-  "logs": [
-    {
-      "timestamp": "2024-04-12T08:47:12.612991",
-      "level": "INFO",
-      "message": "已确认训练资源数据集 datasets/qwen_demo.jsonl，配置 configs/qwen_demo.yaml"
-    }
-  ],
-  "resume_source_artifact_id": null
-}
-```
-
-- **`curl` 示例**
+### 上传训练配置
+- **方法/路径**：`PUT /v1/train-config`
+- **请求体**：YAML 文件
+- **响应体**：上传的元数据
 
 ```bash
+curl -X PUT "http://localhost:8000/v1/train-config" \
+  -F "file=@train.yaml"
+```
+
+### 创建部署
+- **方法/路径**：`POST /deployments`
+- **请求体**：模型路径、可选标签、额外参数等
+- **响应体**：`DeploymentInfo`
+
+```bash
+curl -X POST "http://localhost:8000/deployments" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "model_path": "/models/qwen",
+        "tags": ["demo"],
+        "preferred_gpu": 0
+      }'
 curl -X POST "http://localhost:8000/projects/qwen-finetune/runs"
 ```
 
 ### 文本脱敏
 - **方法/路径**：`POST /v1/deidentify:test`
 - **请求体**：`DeidRequest`
-
-```json
-{
-  "policy_id": "default",
-  "text": ["客户手机号 13812345678"],
-  "options": {
-    "locale": "zh-CN",
-    "format": "text",
-    "return_mapping": true,
-    "seed": 42
-  }
-}
-```
-
 - **响应体**：`DeidResponse`
-
-```json
-{
-  "deidentified": ["客户手机号 30864079571"],
-  "mapping": [
-    {
-      "type": "NUMBER",
-      "original": "13812345678",
-      "pseudo": "30864079571"
-    }
-  ],
-  "policy_version": "2024-01-01"
-}
-```
-
-- **`curl` 示例**
 
 ```bash
 curl -X POST "http://localhost:8000/v1/deidentify:test" \
@@ -211,6 +177,7 @@ curl -X POST "http://localhost:8000/v1/deidentify:test" \
       }'
 ```
 
+更多字段与返回格式请参考 `src/schemas/__init__.py` 中的 Pydantic 定义。
 ### 创建数据集元信息
 - **方法/路径**：`POST /v1/datasets`
 - **请求体**：`DatasetCreateRequest`

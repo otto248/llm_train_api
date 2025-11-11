@@ -1,7 +1,5 @@
-"""Application package exposing the FastAPI factory."""
+"""Application package exposing the FastAPI app factory."""
 
-from __future__ import annotations
-
-from main import app, create_app
+from .main import app, create_app
 
 __all__ = ["app", "create_app"]
