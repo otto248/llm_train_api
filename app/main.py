@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Final
 
 from fastapi import FastAPI
 
-from .api import (
-    register_dataset_routes,
-    register_deid_routes,
-    register_deployment_routes,
-    register_health_routes,
-    register_project_routes,
-    register_train_config_routes,
-)
-from .utils import ensure_data_directories
+from app.logging import configure_logging
+from src.features.datasets import register_routes as register_dataset_routes
+from src.features.deid import register_routes as register_deid_routes
+from src.features.deployments import register_routes as register_deployment_routes
+from src.features.health import register_routes as register_health_routes
+from src.features.projects import register_routes as register_project_routes
+from src.features.train_configs import register_routes as register_train_config_routes
+from src.utils.filesystem import ensure_data_directories
 
 APP_TITLE: Final[str] = "LLM Training Management API"
 APP_VERSION: Final[str] = "0.1.0"
@@ -24,7 +22,7 @@ APP_VERSION: Final[str] = "0.1.0"
 def create_app() -> FastAPI:
     """Construct and configure the FastAPI application instance."""
 
-    logging.basicConfig(level=logging.INFO)
+    configure_logging()
     ensure_data_directories()
     application = FastAPI(title=APP_TITLE, version=APP_VERSION)
     register_project_routes(application)
