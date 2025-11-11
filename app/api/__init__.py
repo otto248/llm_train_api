@@ -4,24 +4,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from . import (
-    container,
-    datasets,
-    deid,
-    deployments,
-    health,
-    projects,
-    train_config,
-    uploads,
-)
+from . import dataset_upload, deid, deployment, health, project, train_config
 
 api_router = APIRouter()
-api_router.include_router(projects.router)
-api_router.include_router(container.router)
+api_router.include_router(project.router)
 api_router.include_router(deid.router)
-api_router.include_router(deployments.router)
-api_router.include_router(datasets.router)
-api_router.include_router(uploads.router)
+api_router.include_router(deployment.router)
+api_router.include_router(dataset_upload.router)
 api_router.include_router(train_config.router)
 api_router.include_router(health.router)
 
