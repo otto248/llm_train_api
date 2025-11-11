@@ -188,3 +188,43 @@ class DatasetRecord(BaseModel):
     created_at: str
     status: str
     files: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class OperationAction(str, Enum):
+    """系统支持记录的操作类型。"""
+
+    CREATE_DATASET = "create_dataset"
+    UPLOAD_DATASET_FILE = "upload_dataset_file"
+    UPLOAD_TRAIN_CONFIG = "upload_train_config"
+    ABORT_UPLOAD = "abort_upload"
+    DELETE_DATASET_FILE = "delete_dataset_file"
+    DELETE_TRAIN_CONFIG = "delete_train_config"
+
+
+class OperationTargetType(str, Enum):
+    """操作影响的资源类型。"""
+
+    DATASET = "dataset"
+    DATASET_FILE = "dataset_file"
+    UPLOAD_SESSION = "upload_session"
+    TRAIN_CONFIG = "train_config"
+
+
+class OperationStatus(str, Enum):
+    """操作执行结果状态。"""
+
+    SUCCESS = "success"
+    FAILURE = "failure"
+
+
+class OperationLog(BaseModel):
+    """记录关键接口操作行为的审计日志模型。"""
+
+    id: str
+    action: OperationAction
+    target_type: OperationTargetType
+    target_id: Optional[str] = None
+    status: OperationStatus
+    detail: Optional[str] = None
+    created_at: datetime
+    extra: Dict[str, Any] = Field(default_factory=dict)

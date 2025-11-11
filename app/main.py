@@ -34,6 +34,9 @@ from .models import (
     DeidResponse,
     DatasetCreateRequest,
     DatasetRecord,
+    OperationAction,
+    OperationStatus,
+    OperationTargetType,
 )
 from .storage import DatabaseStorage, storage
 from .utils import (
@@ -322,6 +325,17 @@ def create_dataset(req: DatasetCreateRequest) -> Dict[str, str]:
     record_dict["metadata"] = record_dict.get("metadata") or {}
     record_dict.setdefault("train_config", None)
     save_dataset_record(record_dict)
+    storage.record_operation(
+        action=OperationAction.CREATE_DATASET,
+        target_type=OperationTargetType.DATASET,
+        target_id=dataset_id,
+        status=OperationStatus.SUCCESS,
+        detail="Dataset metadata created",
+        extra={
+            "name": req.name,
+            "task_type": req.task_type,
+        },
+    )
     return {"id": dataset_id, "created_at": created_at}
 
 
@@ -377,6 +391,18 @@ async def upload_small_file(dataset_id: str, file: UploadFile = File(...)) -> Di
     record.setdefault("files", []).append(file_entry)
     record["status"] = "ready"
     save_dataset_record(record)
+    storage.record_operation(
+        action=OperationAction.UPLOAD_DATASET_FILE,
+        target_type=OperationTargetType.DATASET_FILE,
+        target_id=upload_id,
+        status=OperationStatus.SUCCESS,
+        detail="Dataset file uploaded",
+        extra={
+            "dataset_id": dataset_id,
+            "filename": file.filename,
+            "bytes": size,
+        },
+    )
     return {
         "upload_id": upload_id,
         "dataset_id": dataset_id,
@@ -396,10 +422,35 @@ def abort_upload(upload_id: str) -> Dict[str, str]:
     if stored_filename:
         file_path = FILES_DIR / stored_filename
         if file_path.exists():
+            removal_failed: OSError | None = None
             try:
                 file_path.unlink()
+                storage.record_operation(
+                    action=OperationAction.DELETE_DATASET_FILE,
+                    target_type=OperationTargetType.DATASET_FILE,
+                    target_id=upload_id,
+                    status=OperationStatus.SUCCESS,
+                    detail="Stored dataset file removed after abort",
+                    extra={
+                        "stored_filename": stored_filename,
+                        "dataset_id": upload_record.get("dataset_id"),
+                    },
+                )
             except OSError as exc:  # pragma: no cover - defensive cleanup
+                removal_failed = exc
                 logger.warning("Failed to remove stored file %s: %s", file_path, exc)
+            if removal_failed is not None:
+                storage.record_operation(
+                    action=OperationAction.DELETE_DATASET_FILE,
+                    target_type=OperationTargetType.DATASET_FILE,
+                    target_id=upload_id,
+                    status=OperationStatus.FAILURE,
+                    detail=str(removal_failed),
+                    extra={
+                        "stored_filename": stored_filename,
+                        "dataset_id": upload_record.get("dataset_id"),
+                    },
+                )
     try:
         upload_meta_path.unlink()
     except OSError as exc:  # pragma: no cover - defensive cleanup
@@ -417,6 +468,16 @@ def abort_upload(upload_id: str) -> Dict[str, str]:
             ]
             if len(record["files"]) != original_len:
                 save_dataset_record(record)
+    storage.record_operation(
+        action=OperationAction.ABORT_UPLOAD,
+        target_type=OperationTargetType.UPLOAD_SESSION,
+        target_id=upload_id,
+        status=OperationStatus.SUCCESS,
+        detail="Upload aborted",
+        extra={
+            "dataset_id": dataset_id,
+        },
+    )
     return {"upload_id": upload_id, "status": "aborted"}
 
 
@@ -440,6 +501,14 @@ async def upload_train_config(file: UploadFile = File(...)) -> Dict[str, Any]:
         "size": len(content),
     }
     save_train_config_metadata(metadata)
+    storage.record_operation(
+        action=OperationAction.UPLOAD_TRAIN_CONFIG,
+        target_type=OperationTargetType.TRAIN_CONFIG,
+        target_id=file.filename,
+        status=OperationStatus.SUCCESS,
+        detail="Training YAML uploaded",
+        extra={"size": len(content)},
+    )
     return {"train_config": metadata}
 
 
@@ -454,12 +523,33 @@ def get_train_config() -> Dict[str, Any]:
 @app.delete("/v1/train-config")
 def delete_train_config() -> Dict[str, str]:
     config_path = train_config_path()
-    if config_path.exists():
+    file_was_present = config_path.exists()
+    removal_error: OSError | None = None
+    if file_was_present:
         try:
             config_path.unlink()
         except OSError as exc:  # pragma: no cover - best-effort cleanup
+            removal_error = exc
             logger.warning("Failed to remove train config %s: %s", config_path, exc)
     delete_train_config_metadata()
+    if removal_error is not None:
+        storage.record_operation(
+            action=OperationAction.DELETE_TRAIN_CONFIG,
+            target_type=OperationTargetType.TRAIN_CONFIG,
+            target_id=config_path.name,
+            status=OperationStatus.FAILURE,
+            detail=str(removal_error),
+            extra={"file_was_present": file_was_present},
+        )
+    else:
+        storage.record_operation(
+            action=OperationAction.DELETE_TRAIN_CONFIG,
+            target_type=OperationTargetType.TRAIN_CONFIG,
+            target_id=config_path.name,
+            status=OperationStatus.SUCCESS,
+            detail="Training YAML deleted",
+            extra={"file_was_present": file_was_present},
+        )
     return {"status": "train_config_deleted"}
 
 
