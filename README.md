@@ -300,6 +300,137 @@ curl -X PUT "http://localhost:8000/v1/datasets/93f22d88-9d39-4f71-a3b1-0f41d396a
   -F "file=@./train.jsonl"
 ```
 
+### 创建模型部署
+- **方法/路径**：`POST /deployments`
+- **请求体**：`CreateDeploymentRequest`
+
+```json
+{
+  "model_path": "models/qwen2.5",
+  "model_version": "v1",
+  "tags": ["demo"],
+  "extra_args": "--max-num-seqs 4",
+  "preferred_gpu": 0,
+  "health_path": "/health"
+}
+```
+
+- **响应体**：`DeploymentInfo`
+
+```json
+{
+  "deployment_id": "16b3f6fe-7047-42bd-89f8-8da30d47eeb5",
+  "model_path": "models/qwen2.5",
+  "model_version": "v1",
+  "tags": ["demo"],
+  "gpu_id": 0,
+  "port": 8234,
+  "pid": 4311,
+  "status": "running",
+  "started_at": 1712904843.021,
+  "stopped_at": null,
+  "health_ok": true,
+  "vllm_cmd": "vllm --model models/qwen2.5 --http-port 8234 --device-ids 0 --max-num-seqs 4",
+  "log_file": "./deploy_logs/16b3f6fe-7047-42bd-89f8-8da30d47eeb5.log",
+  "health_path": "/health"
+}
+```
+
+- **`curl` 示例**
+
+```bash
+curl -X POST "http://localhost:8000/deployments" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "model_path": "models/qwen2.5",
+        "model_version": "v1",
+        "tags": ["demo"],
+        "extra_args": "--max-num-seqs 4",
+        "preferred_gpu": 0
+      }'
+```
+
+### 查询模型部署状态
+- **方法/路径**：`GET /deployments/{deployment_id}`
+- **路径参数**：`deployment_id`
+- **响应体**：`DeploymentInfo`
+
+```json
+{
+  "deployment_id": "16b3f6fe-7047-42bd-89f8-8da30d47eeb5",
+  "model_path": "models/qwen2.5",
+  "model_version": "v1",
+  "tags": ["demo"],
+  "gpu_id": 0,
+  "port": 8234,
+  "pid": 4311,
+  "status": "running",
+  "started_at": 1712904843.021,
+  "stopped_at": null,
+  "health_ok": true,
+  "vllm_cmd": "vllm --model models/qwen2.5 --http-port 8234 --device-ids 0 --max-num-seqs 4",
+  "log_file": "./deploy_logs/16b3f6fe-7047-42bd-89f8-8da30d47eeb5.log",
+  "health_path": "/health"
+}
+```
+
+- **`curl` 示例**
+
+```bash
+curl "http://localhost:8000/deployments/16b3f6fe-7047-42bd-89f8-8da30d47eeb5"
+```
+
+### 删除模型部署
+- **方法/路径**：`DELETE /deployments/{deployment_id}`
+- **路径参数**：`deployment_id`
+- **查询参数**：`force`（可选，布尔值，进程无法退出时是否强制 `SIGKILL`）
+- **响应体**：
+
+```json
+{
+  "detail": "deployment removed",
+  "deployment_id": "16b3f6fe-7047-42bd-89f8-8da30d47eeb5"
+}
+```
+
+- **`curl` 示例**
+
+```bash
+curl -X DELETE "http://localhost:8000/deployments/16b3f6fe-7047-42bd-89f8-8da30d47eeb5?force=true"
+```
+
+### 列出模型部署
+- **方法/路径**：`GET /deployments`
+- **查询参数（可选）**：`model`、`tag`、`status`
+- **响应体**：`DeploymentInfo` 数组
+
+```json
+[
+  {
+    "deployment_id": "16b3f6fe-7047-42bd-89f8-8da30d47eeb5",
+    "model_path": "models/qwen2.5",
+    "model_version": "v1",
+    "tags": ["demo"],
+    "gpu_id": 0,
+    "port": 8234,
+    "pid": 4311,
+    "status": "running",
+    "started_at": 1712904843.021,
+    "stopped_at": null,
+    "health_ok": true,
+    "vllm_cmd": "vllm --model models/qwen2.5 --http-port 8234 --device-ids 0 --max-num-seqs 4",
+    "log_file": "./deploy_logs/16b3f6fe-7047-42bd-89f8-8da30d47eeb5.log",
+    "health_path": "/health"
+  }
+]
+```
+
+- **`curl` 示例**
+
+```bash
+curl "http://localhost:8000/deployments?model=models/qwen2.5&status=running"
+```
+
 ### 取消文件上传
 - **方法/路径**：`DELETE /v1/uploads/{upload_id}`
 - **路径参数**：`upload_id`
