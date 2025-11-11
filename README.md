@@ -59,6 +59,62 @@ fastapi-app/
 
 ## 主要接口示例
 
+## 快速开始
+1. 安装依赖：`pip install -r requirements.txt`
+2. 启动服务：`uvicorn main:app --reload`
+3. 使用 `http://localhost:8000/docs` 查看交互式文档。
+
+## 主要接口示例
+## 项目结构
+```
+fastapi-app/
+├─ app/
+│  ├─ __init__.py              # 暴露 app/create_app
+│  ├─ config.py                # 平台常量与限制配置
+│  ├─ deps.py                  # FastAPI 依赖注入
+│  ├─ logging.py               # 日志初始化入口
+│  └─ main.py                  # 应用工厂与路由装配
+├─ src/
+│  ├─ __init__.py
+│  ├─ features/
+│  │  ├─ datasets/
+│  │  │  ├─ __init__.py
+│  │  │  └─ api.py             # 数据集与上传接口
+│  │  ├─ deid/
+│  │  │  ├─ __init__.py
+│  │  │  ├─ api.py             # 脱敏接口
+│  │  │  └─ services.py        # 脱敏策略实现
+│  │  ├─ deployments/
+│  │  │  ├─ __init__.py
+│  │  │  └─ api.py             # 模型部署管理
+│  │  ├─ health/
+│  │  │  ├─ __init__.py
+│  │  │  └─ api.py             # 健康检查
+│  │  ├─ projects/
+│  │  │  ├─ __init__.py
+│  │  │  └─ api.py             # 项目与运行管理
+│  │  └─ train_configs/
+│  │     ├─ __init__.py
+│  │     └─ api.py             # 训练配置上传
+│  ├─ models/
+│  │  └─ __init__.py           # 共享 Pydantic 模型
+│  ├─ storage/
+│  │  └─ __init__.py           # SQLAlchemy 存储实现
+│  └─ utils/
+│     └─ filesystem.py         # 本地文件系统工具
+├─ main.py                     # 顶层可执行入口
+└─ requirements.txt
+```
+
+## 功能概览
+- **项目管理**：登记训练项目的基本信息（名称、负责人、数据集、训练配置等），并持久化保存。项目默认处于 `active` 状态，可扩展为归档等流程。【F:src/models/__init__.py†L12-L51】【F:src/storage/__init__.py†L67-L123】
+- **运行管理**：为任意项目创建新的训练运行，记录启动命令、运行状态、进度、指标及关联系统日志/工件。【F:src/features/projects/api.py†L83-L147】【F:src/storage/__init__.py†L124-L326】
+- **日志与工件**：运行创建时自动补充示例日志与工件，便于前端或外部系统演示展示，也支持追加标签、分页查询等存储能力。【F:src/storage/__init__.py†L327-L567】
+
+## API 端点
+
+以下内容按接口列出了请求参数、响应结构以及便于调试的 `curl` 示例。所有端点均返回 Pydantic 模型封装的结构化数据，详细字段定义可参考 `src/models/__init__.py`。【F:src/models/__init__.py†L12-L215】
+
 ### 创建项目
 - **方法/路径**：`POST /projects`
 - **请求体**：`ProjectCreate`
