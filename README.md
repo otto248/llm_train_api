@@ -205,7 +205,7 @@ curl -X POST "http://localhost:8000/v1/deidentify:test" \
 {
   "name": "chatglm_pairs_v1",
   "type": "text2text",
-  "source": "object-storage",
+  "description": "object-storage",
   "task_type": "sft",
   "metadata": {
     "language": "zh",
@@ -231,7 +231,7 @@ curl -X POST "http://localhost:8000/v1/datasets" \
   -d '{
         "name": "chatglm_pairs_v1",
         "type": "text2text",
-        "source": "object-storage",
+        "description": "object-storage",
         "task_type": "sft",
         "metadata": {"language": "zh", "records": 1024}
       }'
@@ -247,7 +247,7 @@ curl -X POST "http://localhost:8000/v1/datasets" \
   "id": "93f22d88-9d39-4f71-a3b1-0f41d396a4f7",
   "name": "chatglm_pairs_v1",
   "type": "text2text",
-  "source": "object-storage",
+  "description": "object-storage",
   "task_type": "sft",
   "metadata": {
     "language": "zh",
@@ -264,11 +264,7 @@ curl -X POST "http://localhost:8000/v1/datasets" \
       "uploaded_at": "2024-04-12T08:55:02.441Z"
     }
   ],
-  "train_config": {
-    "filename": "finetune.yaml",
-    "uploaded_at": "2024-04-12T08:56:12.871Z",
-    "size": 2048
-  },
+  "train_config": null,
   "upload_progress": {
     "files_count": 1
   }
@@ -323,14 +319,12 @@ curl -X DELETE "http://localhost:8000/v1/uploads/e874d5a8-98f1-4fdb-9055-11e53fd
 ```
 
 ### 上传训练配置文件
-- **方法/路径**：`PUT /v1/datasets/{dataset_id}/train-config`
-- **路径参数**：`dataset_id`
+- **方法/路径**：`PUT /v1/train-config`
 - **请求体**：`multipart/form-data`，字段 `file` 为 `.yaml/.yml` 文件
-- **响应体**：返回关联的配置元信息
+- **响应体**：返回上传配置的元信息
 
 ```json
 {
-  "dataset_id": "93f22d88-9d39-4f71-a3b1-0f41d396a4f7",
   "train_config": {
     "filename": "finetune.yaml",
     "uploaded_at": "2024-04-12T08:56:12.871Z",
@@ -342,15 +336,14 @@ curl -X DELETE "http://localhost:8000/v1/uploads/e874d5a8-98f1-4fdb-9055-11e53fd
 - **`curl` 示例**
 
 ```bash
-curl -X PUT "http://localhost:8000/v1/datasets/93f22d88-9d39-4f71-a3b1-0f41d396a4f7/train-config" \
+curl -X PUT "http://localhost:8000/v1/train-config" \
   -H "Content-Type: multipart/form-data" \
   -F "file=@./finetune.yaml"
 ```
 
 ### 获取训练配置文件信息
-- **方法/路径**：`GET /v1/datasets/{dataset_id}/train-config`
-- **路径参数**：`dataset_id`
-- **响应体**：当前关联的配置元信息
+- **方法/路径**：`GET /v1/train-config`
+- **响应体**：当前已上传的配置元信息
 
 ```json
 {
@@ -363,17 +356,15 @@ curl -X PUT "http://localhost:8000/v1/datasets/93f22d88-9d39-4f71-a3b1-0f41d396a
 - **`curl` 示例**
 
 ```bash
-curl "http://localhost:8000/v1/datasets/93f22d88-9d39-4f71-a3b1-0f41d396a4f7/train-config"
+curl "http://localhost:8000/v1/train-config"
 ```
 
 ### 删除训练配置文件
-- **方法/路径**：`DELETE /v1/datasets/{dataset_id}/train-config`
-- **路径参数**：`dataset_id`
+- **方法/路径**：`DELETE /v1/train-config`
 - **响应体**：
 
 ```json
 {
-  "dataset_id": "93f22d88-9d39-4f71-a3b1-0f41d396a4f7",
   "status": "train_config_deleted"
 }
 ```
@@ -381,7 +372,7 @@ curl "http://localhost:8000/v1/datasets/93f22d88-9d39-4f71-a3b1-0f41d396a4f7/tra
 - **`curl` 示例**
 
 ```bash
-curl -X DELETE "http://localhost:8000/v1/datasets/93f22d88-9d39-4f71-a3b1-0f41d396a4f7/train-config"
+curl -X DELETE "http://localhost:8000/v1/train-config"
 ```
 
 ### 健康检查

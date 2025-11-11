@@ -171,7 +171,7 @@ class DatasetCreateRequest(BaseModel):
 
     name: str
     dtype: Optional[str] = Field(None, alias="type")
-    source: Optional[str] = None
+    description: Optional[str] = None
     task_type: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
 
@@ -182,7 +182,7 @@ class DatasetRecord(BaseModel):
     id: str
     name: str
     type: Optional[str] = None
-    source: Optional[str] = None
+    description: Optional[str] = None
     task_type: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
     created_at: str
