@@ -11,7 +11,15 @@ import random
 from pathlib import Path as PathlibPath
 from typing import Any, Dict, List
 
-from fastapi import Body, Depends, FastAPI, File, HTTPException, Path as PathParam, UploadFile
+from fastapi import (
+    Body,
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Path as PathParam,
+    UploadFile,
+)
 
 from .models import (
     ContainerFileRequest,
@@ -29,6 +37,14 @@ from .models import (
     DatasetRecord,
 )
 from .storage import DatabaseStorage, storage
+from .utils import (
+    FILES_DIR,
+    TRAIN_CONFIG_DIR,
+    UPLOADS_DIR,
+    ensure_data_directories,
+    load_dataset_record,
+    save_dataset_record,
+)
 
 app = FastAPI(title="LLM Training Management API", version="0.1.0")
 logger = logging.getLogger(__name__)
@@ -45,20 +61,7 @@ _LOCAL_DOCKER_CONTAINER_NAME = "mycontainer"
 
 _HOST_TRAINING_PATH = PathlibPath(_HOST_TRAINING_DIR).resolve()
 
-_DATA_ROOT_DIR = PathlibPath("/tmp/llm_train_api_data")
-_DATASETS_DIR = _DATA_ROOT_DIR / "datasets"
-FILES_DIR = _DATA_ROOT_DIR / "files"
-UPLOADS_DIR = _DATA_ROOT_DIR / "uploads"
-TRAIN_CONFIG_DIR = _DATA_ROOT_DIR / "train_configs"
-
-for directory in (
-    _DATA_ROOT_DIR,
-    _DATASETS_DIR,
-    FILES_DIR,
-    UPLOADS_DIR,
-    TRAIN_CONFIG_DIR,
-):
-    directory.mkdir(parents=True, exist_ok=True)
+ensure_data_directories()
 
 MAX_SMALL_FILE_BYTES = 10 * 1024 * 1024  # 10MB
 MAX_YAML_BYTES = 5 * 1024 * 1024  # 5MB
@@ -115,27 +118,6 @@ class RandomDigitReplacement(DeidStrategy):
             for original, pseudo in mapping.items()
         ]
         return deidentified_texts, mapping_list
-
-
-def _dataset_record_path(dataset_id: str) -> PathlibPath:
-    return _DATASETS_DIR / f"{dataset_id}.json"
-
-
-def save_dataset_record(record: Dict[str, Any]) -> None:
-    dataset_id = record.get("id")
-    if not dataset_id:
-        raise ValueError("Dataset record must include an 'id' field")
-    normalized = dict(record)
-    normalized.setdefault("files", [])
-    normalized.setdefault("train_config", None)
-    with open(_dataset_record_path(dataset_id), "w", encoding="utf-8") as file_obj:
-        json.dump(normalized, file_obj, ensure_ascii=False, indent=2)
-
-
-def load_dataset_record(dataset_id: str) -> Dict[str, Any]:
-    record_path = _dataset_record_path(dataset_id)
-    with open(record_path, "r", encoding="utf-8") as file_obj:
-        return json.load(file_obj)
 
 
 def _launch_training_process(start_command: str) -> subprocess.Popen[bytes]:
