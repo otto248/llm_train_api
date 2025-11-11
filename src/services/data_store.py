@@ -1,27 +1,22 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 from uuid import uuid4
 
-from sqlalchemy import (
-    Column,
-    DateTime,
-    Float,
-    ForeignKey,
-    Integer,
-    MetaData,
-    String,
-    Table,
-    Text,
-    create_engine,
-    select,
-)
+from sqlalchemy import select
 from sqlalchemy.engine import Connection, Engine, Row
 
-from .models import (
+from src.db.models import (
+    artifacts_table,
+    logs_table,
+    operation_logs_table,
+    projects_table,
+    runs_table,
+)
+from src.db.session import get_engine, init_schema
+from src.schemas import (
     Artifact,
     ArtifactListResponse,
     ArtifactTagRequest,
@@ -39,87 +34,6 @@ from .models import (
     Run,
     RunDetail,
     RunStatus,
-)
-
-
-_DEFAULT_DB_URL = os.getenv(
-    "TRAINING_DB_URL",
-    "postgresql+psycopg://app:secret123@localhost:5432/appdb",
-)
-
-
-metadata = MetaData()
-
-
-projects_table = Table(
-    "projects",
-    metadata,
-    Column("id", String, primary_key=True),
-    Column("name", String, unique=True, nullable=False),
-    Column("description", Text, nullable=True),
-    Column("owner", String, nullable=False),
-    Column("tags", Text, nullable=False, default="[]"),
-    Column("dataset_name", String, nullable=False),
-    Column("training_yaml_name", String, nullable=False),
-    Column("status", String, nullable=False),
-    Column("created_at", DateTime, nullable=False),
-    Column("updated_at", DateTime, nullable=False),
-    Column("runs_started", Integer, nullable=False, default=0),
-)
-
-
-runs_table = Table(
-    "runs",
-    metadata,
-    Column("id", String, primary_key=True),
-    Column("project_id", String, ForeignKey("projects.id"), nullable=False),
-    Column("status", String, nullable=False),
-    Column("created_at", DateTime, nullable=False),
-    Column("updated_at", DateTime, nullable=False),
-    Column("started_at", DateTime, nullable=True),
-    Column("completed_at", DateTime, nullable=True),
-    Column("progress", Float, nullable=False, default=0.0),
-    Column("metrics", Text, nullable=False, default="{}"),
-    Column("start_command", Text, nullable=False),
-    Column("resume_source_artifact_id", String, nullable=True),
-)
-
-
-logs_table = Table(
-    "logs",
-    metadata,
-    Column("id", String, primary_key=True),
-    Column("run_id", String, ForeignKey("runs.id"), nullable=False, index=True),
-    Column("timestamp", DateTime, nullable=False),
-    Column("level", String, nullable=False),
-    Column("message", Text, nullable=False),
-)
-
-
-artifacts_table = Table(
-    "artifacts",
-    metadata,
-    Column("id", String, primary_key=True),
-    Column("run_id", String, ForeignKey("runs.id"), nullable=False, index=True),
-    Column("name", String, nullable=False),
-    Column("type", String, nullable=False),
-    Column("path", Text, nullable=False),
-    Column("created_at", DateTime, nullable=False),
-    Column("tags", Text, nullable=False, default="[]"),
-)
-
-
-operation_logs_table = Table(
-    "operation_logs",
-    metadata,
-    Column("id", String, primary_key=True),
-    Column("action", String, nullable=False),
-    Column("target_type", String, nullable=False),
-    Column("target_id", String, nullable=True),
-    Column("status", String, nullable=False),
-    Column("detail", Text, nullable=True),
-    Column("extra", Text, nullable=False, default="{}"),
-    Column("created_at", DateTime, nullable=False),
 )
 
 
@@ -186,11 +100,8 @@ class DatabaseStorage:
     def __init__(self, database_url: Optional[str] = None) -> None:
         """初始化数据库连接并确保基础表结构存在。"""
 
-        self._database_url = database_url or _DEFAULT_DB_URL
-        self._engine: Engine = create_engine(
-            self._database_url, future=True, pool_pre_ping=True
-        )
-        metadata.create_all(self._engine)
+        self._engine: Engine = get_engine(database_url)
+        init_schema(self._engine)
 
     # ------------------------------------------------------------------
     # Project operations
