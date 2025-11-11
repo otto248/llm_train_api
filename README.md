@@ -8,13 +8,397 @@
 - **日志与工件**：运行创建时自动补充示例日志与工件，便于前端或外部系统演示展示，也支持追加标签、分页查询等存储能力。【F:app/storage.py†L327-L567】
 
 ## API 端点
-| 方法 | 路径 | 描述 |
-| ---- | ---- | ---- |
-| `POST` | `/projects` | 创建新的训练项目，返回项目详情及空运行列表。【F:app/main.py†L99-L104】 |
-| `GET` | `/projects` | 列出全部训练项目的概要信息。【F:app/main.py†L107-L111】 |
-| `POST` | `/projects/{project_reference}/runs` | 根据项目 ID 或名称触发一次训练运行，校验数据集/配置文件存在并异步执行训练脚本。【F:app/main.py†L114-L159】 |
 
-所有端点均返回 Pydantic 模型封装的结构化数据，详细字段定义可参考 `app/models.py`。【F:app/models.py†L10-L132】
+以下内容按接口列出了请求参数、响应结构以及便于调试的 `curl` 示例。所有端点均返回 Pydantic 模型封装的结构化数据，详细字段定义可参考 `app/models.py`。【F:app/models.py†L10-L225】
+
+### 创建项目
+- **方法/路径**：`POST /projects`
+- **请求体**：`ProjectCreate`
+
+```json
+{
+  "name": "qwen-finetune",
+  "description": "微调 Qwen 以适配客服场景",
+  "owner": "alice",
+  "tags": ["demo", "customer-service"],
+  "dataset_name": "datasets/qwen_demo.jsonl",
+  "training_yaml_name": "configs/qwen_demo.yaml"
+}
+```
+
+- **响应体**：`ProjectDetail`
+
+```json
+{
+  "id": "6f8c7d52-33c4-4d76-9371-5dfd5fcd521a",
+  "name": "qwen-finetune",
+  "description": "微调 Qwen 以适配客服场景",
+  "owner": "alice",
+  "tags": ["demo", "customer-service"],
+  "dataset_name": "datasets/qwen_demo.jsonl",
+  "training_yaml_name": "configs/qwen_demo.yaml",
+  "status": "active",
+  "created_at": "2024-04-12T08:45:09.192384",
+  "updated_at": "2024-04-12T08:45:09.192384",
+  "runs_started": 0,
+  "runs": []
+}
+```
+
+- **`curl` 示例**
+
+```bash
+curl -X POST "http://localhost:8000/projects" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "name": "qwen-finetune",
+        "description": "微调 Qwen 以适配客服场景",
+        "owner": "alice",
+        "tags": ["demo", "customer-service"],
+        "dataset_name": "datasets/qwen_demo.jsonl",
+        "training_yaml_name": "configs/qwen_demo.yaml"
+      }'
+```
+
+### 列出项目
+- **方法/路径**：`GET /projects`
+- **请求参数**：无
+- **响应体**：`Project` 数组
+
+```json
+[
+  {
+    "id": "6f8c7d52-33c4-4d76-9371-5dfd5fcd521a",
+    "name": "qwen-finetune",
+    "description": "微调 Qwen 以适配客服场景",
+    "owner": "alice",
+    "tags": ["demo", "customer-service"],
+    "dataset_name": "datasets/qwen_demo.jsonl",
+    "training_yaml_name": "configs/qwen_demo.yaml",
+    "status": "active",
+    "created_at": "2024-04-12T08:45:09.192384",
+    "updated_at": "2024-04-12T08:45:09.192384",
+    "runs_started": 1
+  }
+]
+```
+
+- **`curl` 示例**
+
+```bash
+curl "http://localhost:8000/projects"
+```
+
+### 创建训练运行
+- **方法/路径**：`POST /projects/{project_reference}/runs`
+- **路径参数**：`project_reference`（项目 ID 或项目名称）
+- **请求体**：无
+- **响应体**：`RunDetail`
+
+```json
+{
+  "id": "5fd396ac-30a4-4eaf-a6b3-81f5b5859377",
+  "project_id": "6f8c7d52-33c4-4d76-9371-5dfd5fcd521a",
+  "status": "running",
+  "created_at": "2024-04-12T08:47:12.508933",
+  "updated_at": "2024-04-12T08:47:12.773520",
+  "started_at": "2024-04-12T08:47:12.773512",
+  "completed_at": null,
+  "progress": 0.05,
+  "metrics": {},
+  "start_command": "bash run_train_full_sft.sh configs/qwen_demo.yaml",
+  "artifacts": [],
+  "logs": [
+    {
+      "timestamp": "2024-04-12T08:47:12.612991",
+      "level": "INFO",
+      "message": "已确认训练资源数据集 datasets/qwen_demo.jsonl，配置 configs/qwen_demo.yaml"
+    }
+  ],
+  "resume_source_artifact_id": null
+}
+```
+
+- **`curl` 示例**
+
+```bash
+curl -X POST "http://localhost:8000/projects/qwen-finetune/runs"
+```
+
+### 在容器内创建文件
+- **方法/路径**：`POST /containers/mycontainer/files`
+- **请求体**：`ContainerFileRequest`
+
+```json
+{
+  "filename": "demo.txt"
+}
+```
+
+- **响应体**：`ContainerFileResponse`
+
+```json
+{
+  "path": "/mnt/disk/demo.txt",
+  "content": "cym"
+}
+```
+
+- **`curl` 示例**
+
+```bash
+curl -X POST "http://localhost:8000/containers/mycontainer/files" \
+  -H "Content-Type: application/json" \
+  -d '{"filename": "demo.txt"}'
+```
+
+### 文本脱敏
+- **方法/路径**：`POST /v1/deidentify:test`
+- **请求体**：`DeidRequest`
+
+```json
+{
+  "policy_id": "default",
+  "text": ["客户手机号 13812345678"],
+  "options": {
+    "locale": "zh-CN",
+    "format": "text",
+    "return_mapping": true,
+    "seed": 42
+  }
+}
+```
+
+- **响应体**：`DeidResponse`
+
+```json
+{
+  "deidentified": ["客户手机号 30864079571"],
+  "mapping": [
+    {
+      "type": "NUMBER",
+      "original": "13812345678",
+      "pseudo": "30864079571"
+    }
+  ],
+  "policy_version": "2024-01-01"
+}
+```
+
+- **`curl` 示例**
+
+```bash
+curl -X POST "http://localhost:8000/v1/deidentify:test" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "policy_id": "default",
+        "text": ["客户手机号 13812345678"],
+        "options": {"return_mapping": true, "seed": 42}
+      }'
+```
+
+### 创建数据集元信息
+- **方法/路径**：`POST /v1/datasets`
+- **请求体**：`DatasetCreateRequest`
+
+```json
+{
+  "name": "chatglm_pairs_v1",
+  "type": "text2text",
+  "source": "object-storage",
+  "task_type": "sft",
+  "metadata": {
+    "language": "zh",
+    "records": 1024
+  }
+}
+```
+
+- **响应体**：包含新数据集 ID 与创建时间
+
+```json
+{
+  "id": "93f22d88-9d39-4f71-a3b1-0f41d396a4f7",
+  "created_at": "2024-04-12T08:50:31.027Z"
+}
+```
+
+- **`curl` 示例**
+
+```bash
+curl -X POST "http://localhost:8000/v1/datasets" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "name": "chatglm_pairs_v1",
+        "type": "text2text",
+        "source": "object-storage",
+        "task_type": "sft",
+        "metadata": {"language": "zh", "records": 1024}
+      }'
+```
+
+### 查询数据集详情
+- **方法/路径**：`GET /v1/datasets/{dataset_id}`
+- **路径参数**：`dataset_id`
+- **响应体**：`DatasetRecord`（附带上传进度）
+
+```json
+{
+  "id": "93f22d88-9d39-4f71-a3b1-0f41d396a4f7",
+  "name": "chatglm_pairs_v1",
+  "type": "text2text",
+  "source": "object-storage",
+  "task_type": "sft",
+  "metadata": {
+    "language": "zh",
+    "records": 1024
+  },
+  "created_at": "2024-04-12T08:50:31.027Z",
+  "status": "ready",
+  "files": [
+    {
+      "upload_id": "e874d5a8-98f1-4fdb-9055-11e53fd0e936",
+      "name": "train.jsonl",
+      "stored_name": "e874d5a8-98f1-4fdb-9055-11e53fd0e936_train.jsonl",
+      "bytes": 1048576,
+      "uploaded_at": "2024-04-12T08:55:02.441Z"
+    }
+  ],
+  "train_config": {
+    "filename": "finetune.yaml",
+    "uploaded_at": "2024-04-12T08:56:12.871Z",
+    "size": 2048
+  },
+  "upload_progress": {
+    "files_count": 1
+  }
+}
+```
+
+- **`curl` 示例**
+
+```bash
+curl "http://localhost:8000/v1/datasets/93f22d88-9d39-4f71-a3b1-0f41d396a4f7"
+```
+
+### 上传小文件到数据集
+- **方法/路径**：`PUT /v1/datasets/{dataset_id}/files`
+- **路径参数**：`dataset_id`
+- **请求体**：`multipart/form-data`，字段 `file` 为待上传文件
+- **响应体**：包含上传任务 ID 及基础信息
+
+```json
+{
+  "upload_id": "e874d5a8-98f1-4fdb-9055-11e53fd0e936",
+  "dataset_id": "93f22d88-9d39-4f71-a3b1-0f41d396a4f7",
+  "bytes": 1048576,
+  "filename": "train.jsonl"
+}
+```
+
+- **`curl` 示例**
+
+```bash
+curl -X PUT "http://localhost:8000/v1/datasets/93f22d88-9d39-4f71-a3b1-0f41d396a4f7/files" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@./train.jsonl"
+```
+
+### 取消文件上传
+- **方法/路径**：`DELETE /v1/uploads/{upload_id}`
+- **路径参数**：`upload_id`
+- **响应体**：
+
+```json
+{
+  "upload_id": "e874d5a8-98f1-4fdb-9055-11e53fd0e936",
+  "status": "aborted"
+}
+```
+
+- **`curl` 示例**
+
+```bash
+curl -X DELETE "http://localhost:8000/v1/uploads/e874d5a8-98f1-4fdb-9055-11e53fd0e936"
+```
+
+### 上传训练配置文件
+- **方法/路径**：`PUT /v1/datasets/{dataset_id}/train-config`
+- **路径参数**：`dataset_id`
+- **请求体**：`multipart/form-data`，字段 `file` 为 `.yaml/.yml` 文件
+- **响应体**：返回关联的配置元信息
+
+```json
+{
+  "dataset_id": "93f22d88-9d39-4f71-a3b1-0f41d396a4f7",
+  "train_config": {
+    "filename": "finetune.yaml",
+    "uploaded_at": "2024-04-12T08:56:12.871Z",
+    "size": 2048
+  }
+}
+```
+
+- **`curl` 示例**
+
+```bash
+curl -X PUT "http://localhost:8000/v1/datasets/93f22d88-9d39-4f71-a3b1-0f41d396a4f7/train-config" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@./finetune.yaml"
+```
+
+### 获取训练配置文件信息
+- **方法/路径**：`GET /v1/datasets/{dataset_id}/train-config`
+- **路径参数**：`dataset_id`
+- **响应体**：当前关联的配置元信息
+
+```json
+{
+  "filename": "finetune.yaml",
+  "uploaded_at": "2024-04-12T08:56:12.871Z",
+  "size": 2048
+}
+```
+
+- **`curl` 示例**
+
+```bash
+curl "http://localhost:8000/v1/datasets/93f22d88-9d39-4f71-a3b1-0f41d396a4f7/train-config"
+```
+
+### 删除训练配置文件
+- **方法/路径**：`DELETE /v1/datasets/{dataset_id}/train-config`
+- **路径参数**：`dataset_id`
+- **响应体**：
+
+```json
+{
+  "dataset_id": "93f22d88-9d39-4f71-a3b1-0f41d396a4f7",
+  "status": "train_config_deleted"
+}
+```
+
+- **`curl` 示例**
+
+```bash
+curl -X DELETE "http://localhost:8000/v1/datasets/93f22d88-9d39-4f71-a3b1-0f41d396a4f7/train-config"
+```
+
+### 健康检查
+- **方法/路径**：`GET /healthz`
+- **响应体**：
+
+```json
+{
+  "status": "ok"
+}
+```
+
+- **`curl` 示例**
+
+```bash
+curl "http://localhost:8000/healthz"
+```
 
 ## 训练命令执行流程
 1. **项目资源校验**：创建运行前，会检查项目中声明的 `dataset_name` 与 `training_yaml_name` 是否存在于宿主机的训练目录（默认 `/data1/qwen2.5-14bxxxx`）。若缺失，将返回 400 错误提示缺少的资源。【F:app/main.py†L59-L87】
