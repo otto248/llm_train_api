@@ -11,6 +11,8 @@ DATASETS_DIR = DATA_ROOT_DIR / "datasets"
 FILES_DIR = DATA_ROOT_DIR / "files"
 UPLOADS_DIR = DATA_ROOT_DIR / "uploads"
 TRAIN_CONFIG_DIR = DATA_ROOT_DIR / "train_configs"
+TRAIN_CONFIG_METADATA_PATH = TRAIN_CONFIG_DIR / "train_config_metadata.json"
+TRAIN_CONFIG_FILENAME = "train_config.yaml"
 
 
 def ensure_data_directories() -> None:
@@ -49,6 +51,37 @@ def load_dataset_record(dataset_id: str) -> Dict[str, Any]:
         raise FileNotFoundError()
     with open(record_path, "r", encoding="utf-8") as file_obj:
         return json.load(file_obj)
+
+
+def train_config_path() -> Path:
+    """Return the canonical filesystem path for the uploaded train config."""
+
+    return TRAIN_CONFIG_DIR / TRAIN_CONFIG_FILENAME
+
+
+def save_train_config_metadata(metadata: Dict[str, Any]) -> None:
+    """Persist train config metadata to disk."""
+
+    with open(TRAIN_CONFIG_METADATA_PATH, "w", encoding="utf-8") as file_obj:
+        json.dump(metadata, file_obj, ensure_ascii=False, indent=2)
+
+
+def load_train_config_metadata() -> Dict[str, Any]:
+    """Load train config metadata from disk."""
+
+    if not TRAIN_CONFIG_METADATA_PATH.exists():
+        raise FileNotFoundError()
+    with open(TRAIN_CONFIG_METADATA_PATH, "r", encoding="utf-8") as file_obj:
+        return json.load(file_obj)
+
+
+def delete_train_config_metadata() -> None:
+    """Remove persisted train config metadata if present."""
+
+    try:
+        TRAIN_CONFIG_METADATA_PATH.unlink()
+    except FileNotFoundError:
+        return
 
 
 def launch_training_process(

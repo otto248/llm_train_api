@@ -38,13 +38,16 @@ from .models import (
 from .storage import DatabaseStorage, storage
 from .utils import (
     FILES_DIR,
-    TRAIN_CONFIG_DIR,
     UPLOADS_DIR,
+    delete_train_config_metadata,
     ensure_data_directories,
     launch_training_process,
     load_dataset_record,
+    load_train_config_metadata,
     run_container_command,
     save_dataset_record,
+    save_train_config_metadata,
+    train_config_path,
 )
 
 app = FastAPI(title="LLM Training Management API", version="0.1.0")
@@ -308,7 +311,7 @@ def create_dataset(req: DatasetCreateRequest) -> Dict[str, str]:
         id=dataset_id,
         name=req.name,
         type=req.dtype,
-        source=req.source,
+        description=req.description,
         task_type=req.task_type,
         metadata=req.metadata or {},
         created_at=created_at,
@@ -417,12 +420,8 @@ def abort_upload(upload_id: str) -> Dict[str, str]:
     return {"upload_id": upload_id, "status": "aborted"}
 
 
-@app.put("/v1/datasets/{dataset_id}/train-config")
-async def upload_train_config(dataset_id: str, file: UploadFile = File(...)) -> Dict[str, Any]:
-    try:
-        record = load_dataset_record(dataset_id)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="Dataset not found") from exc
+@app.put("/v1/train-config")
+async def upload_train_config(file: UploadFile = File(...)) -> Dict[str, Any]:
     if not (file.filename.endswith(".yaml") or file.filename.endswith(".yml")):
         raise HTTPException(status_code=400, detail="Only .yaml or .yml files are allowed")
     content = await file.read()
@@ -431,48 +430,37 @@ async def upload_train_config(dataset_id: str, file: UploadFile = File(...)) -> 
             status_code=413,
             detail="YAML file too large (max 5MB)",
         )
-    config_path = TRAIN_CONFIG_DIR / f"{dataset_id}_train.yaml"
+    config_path = train_config_path()
     with open(config_path, "wb") as file_obj:
         file_obj.write(content)
     uploaded_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "") + "Z"
-    record["train_config"] = {
+    metadata = {
         "filename": file.filename,
         "uploaded_at": uploaded_at,
         "size": len(content),
     }
-    record["status"] = "train_config_uploaded"
-    save_dataset_record(record)
-    return {"dataset_id": dataset_id, "train_config": record["train_config"]}
+    save_train_config_metadata(metadata)
+    return {"train_config": metadata}
 
 
-@app.get("/v1/datasets/{dataset_id}/train-config")
-def get_train_config(dataset_id: str) -> Dict[str, Any]:
+@app.get("/v1/train-config")
+def get_train_config() -> Dict[str, Any]:
     try:
-        record = load_dataset_record(dataset_id)
+        return load_train_config_metadata()
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="Dataset not found") from exc
-    train_config = record.get("train_config")
-    if not train_config:
-        raise HTTPException(status_code=404, detail="Train config not uploaded yet")
-    return train_config
+        raise HTTPException(status_code=404, detail="Train config not uploaded yet") from exc
 
 
-@app.delete("/v1/datasets/{dataset_id}/train-config")
-def delete_train_config(dataset_id: str) -> Dict[str, str]:
-    try:
-        record = load_dataset_record(dataset_id)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="Dataset not found") from exc
-    config_path = TRAIN_CONFIG_DIR / f"{dataset_id}_train.yaml"
+@app.delete("/v1/train-config")
+def delete_train_config() -> Dict[str, str]:
+    config_path = train_config_path()
     if config_path.exists():
         try:
             config_path.unlink()
         except OSError as exc:  # pragma: no cover - best-effort cleanup
             logger.warning("Failed to remove train config %s: %s", config_path, exc)
-    record["train_config"] = None
-    record["status"] = "train_config_deleted"
-    save_dataset_record(record)
-    return {"dataset_id": dataset_id, "status": "train_config_deleted"}
+    delete_train_config_metadata()
+    return {"status": "train_config_deleted"}
 
 
 @app.get("/healthz")
