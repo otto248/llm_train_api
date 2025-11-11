@@ -1,3 +1,5 @@
+"""Pydantic data models shared across the training API."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -122,23 +124,6 @@ class ProjectDetail(Project):
 
 class RunDetail(Run):
     """与 `Run` 相同的运行详情模型，为未来扩展保留命名空间。"""
-
-
-class ContainerFileRequest(BaseModel):
-    """描述在容器内创建文件时需要的输入参数。"""
-
-    filename: str = Field(
-        default="cym.txt",
-        description="要在目标容器内 /mnt/disk 目录下创建的文件名",
-        min_length=1,
-    )
-
-
-class ContainerFileResponse(BaseModel):
-    """返回容器内已创建文件的元数据。"""
-
-    path: str = Field(..., description="容器内创建文件的绝对路径")
-    content: str = Field(..., description="写入文件的内容")
 
 
 class DeidRequestOptions(BaseModel):
