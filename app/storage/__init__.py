@@ -21,7 +21,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import Connection, Engine, Row
 
-from .models import (
+from ..models import (
     Artifact,
     ArtifactListResponse,
     ArtifactTagRequest,
