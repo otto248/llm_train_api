@@ -550,7 +550,7 @@ curl "http://localhost:8000/healthz"
 pip install -r requirements.txt
 
 # 启动开发服务器（默认端口 8000）
-uvicorn app.main:app --reload
+uvicorn main:app --reload
 ```
 启动后可通过 <http://localhost:8000/docs> 查看自动生成的 Swagger UI 并调试接口。
 
