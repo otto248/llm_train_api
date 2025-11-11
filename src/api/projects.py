@@ -9,16 +9,16 @@ from typing import List
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path as PathParam
 
-from src.common.config import (
+from app.config import (
     DOCKER_CONTAINER_NAME,
     DOCKER_WORKING_DIR,
     HOST_TRAINING_DIR,
     HOST_TRAINING_PATH,
 )
-from src.common.deps import get_storage
-from src.models import LogEntry, Project, ProjectCreate, ProjectDetail, RunDetail, RunStatus
-from src.storage import DatabaseStorage
-from src.utils.filesystem import launch_training_process
+from app.deps import get_storage
+from src.schemas import LogEntry, Project, ProjectCreate, ProjectDetail, RunDetail, RunStatus
+from src.services.data_store import DatabaseStorage
+from src.utils.storage import launch_training_process
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 logger = logging.getLogger(__name__)

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, FastAPI, HTTPException
 
-from src.features.deid.services import build_deid_response
-from src.models import DeidRequest, DeidResponse
+from src.services.deidentify_service import build_deid_response
+from src.schemas import DeidRequest, DeidResponse
 
 router = APIRouter(prefix="/v1", tags=["deid"])
 

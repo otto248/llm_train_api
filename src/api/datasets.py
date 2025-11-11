@@ -10,16 +10,16 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, FastAPI, File, HTTPException, UploadFile
 
-from src.common.config import MAX_SMALL_FILE_BYTES
-from src.models import (
+from app.config import MAX_SMALL_FILE_BYTES
+from src.schemas import (
     DatasetCreateRequest,
     DatasetRecord,
     OperationAction,
     OperationStatus,
     OperationTargetType,
 )
-from src.storage import storage
-from src.utils.filesystem import (
+from src.services.data_store import storage
+from src.utils.storage import (
     FILES_DIR,
     UPLOADS_DIR,
     load_dataset_record,

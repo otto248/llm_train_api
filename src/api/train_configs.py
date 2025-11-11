@@ -8,10 +8,10 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, FastAPI, File, HTTPException, UploadFile
 
-from src.common.config import MAX_YAML_BYTES
-from src.models import OperationAction, OperationStatus, OperationTargetType
-from src.storage import storage
-from src.utils.filesystem import (
+from app.config import MAX_YAML_BYTES
+from src.schemas import OperationAction, OperationStatus, OperationTargetType
+from src.services.data_store import storage
+from src.utils.storage import (
     delete_train_config_metadata,
     load_train_config_metadata,
     save_train_config_metadata,

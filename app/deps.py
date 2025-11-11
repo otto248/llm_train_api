@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.storage import DatabaseStorage, storage
+from src.services.data_store import DatabaseStorage, storage
 
 
 def get_storage() -> DatabaseStorage:

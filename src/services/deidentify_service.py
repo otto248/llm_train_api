@@ -6,8 +6,8 @@ import random
 import re
 from typing import Any, Dict, List, Tuple
 
-from src.common.config import POLICY_VERSION
-from src.models import DeidRequest, DeidResponse
+from app.config import POLICY_VERSION
+from src.schemas import DeidRequest, DeidResponse
 
 
 class DeidStrategy:
