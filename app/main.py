@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 import json
 import logging
 import shlex
-import subprocess
 import uuid
 import re
 import random
@@ -42,7 +41,9 @@ from .utils import (
     TRAIN_CONFIG_DIR,
     UPLOADS_DIR,
     ensure_data_directories,
+    launch_training_process,
     load_dataset_record,
+    run_container_command,
     save_dataset_record,
 )
 
@@ -120,54 +121,6 @@ class RandomDigitReplacement(DeidStrategy):
         return deidentified_texts, mapping_list
 
 
-def _launch_training_process(start_command: str) -> subprocess.Popen[bytes]:
-    """在目标 Docker 容器内启动远程训练命令。"""
-
-    docker_command = (
-        f"cd {_HOST_TRAINING_DIR} && "
-        f"docker exec -i {_DOCKER_CONTAINER_NAME} "
-        "env LANG=C.UTF-8 bash -lc "
-        f"\"cd {_DOCKER_WORKING_DIR} && {start_command}\""
-    )
-    logger.info("Launching training command: %s", docker_command)
-    try:
-        process = subprocess.Popen(  # noqa: S603, S607 - intentional command execution
-            ["bash", "-lc", docker_command],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-    except FileNotFoundError as exc:  # pragma: no cover - defensive guard
-        raise RuntimeError("无法执行训练命令，请检查服务器环境配置。") from exc
-    return process
-
-
-def _run_container_command(container_name: str, command: str) -> None:
-    docker_command = [
-        "docker",
-        "exec",
-        "-i",
-        container_name,
-        "bash",
-        "-lc",
-        command,
-    ]
-    result = subprocess.run(  # noqa: S603, S607 - intentional command execution
-        docker_command,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        stderr = result.stderr.strip()
-        logger.error(
-            "Failed to run command in container %s: %s", container_name, stderr
-        )
-        raise RuntimeError(
-            f"无法在容器 {container_name} 中执行命令：{stderr or '未知错误'}"
-        )
-
-
 def get_storage() -> DatabaseStorage:
     return storage
 
@@ -202,7 +155,11 @@ def _create_file_in_container(filename: str) -> str:
         f"printf %s {shlex.quote(_CONTAINER_FILE_CONTENT)} > {shlex.quote(target_path)}"
     )
     try:
-        _run_container_command(_LOCAL_DOCKER_CONTAINER_NAME, shell_command)
+        run_container_command(
+            _LOCAL_DOCKER_CONTAINER_NAME,
+            shell_command,
+            log=logger,
+        )
     except RuntimeError as exc:  # pragma: no cover - depends on runtime environment
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return target_path
@@ -278,7 +235,13 @@ def create_run(
         ],
     )
     try:
-        process = _launch_training_process(start_command)
+        process = launch_training_process(
+            start_command,
+            host_training_dir=_HOST_TRAINING_DIR,
+            docker_container_name=_DOCKER_CONTAINER_NAME,
+            docker_working_dir=_DOCKER_WORKING_DIR,
+            log=logger,
+        )
     except RuntimeError as exc:
         store.append_run_logs(
             run.id,

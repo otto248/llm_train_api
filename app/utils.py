@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import logging
+import subprocess
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 DATA_ROOT_DIR = Path("/tmp/llm_train_api_data")
 DATASETS_DIR = DATA_ROOT_DIR / "datasets"
@@ -47,6 +49,70 @@ def load_dataset_record(dataset_id: str) -> Dict[str, Any]:
         raise FileNotFoundError()
     with open(record_path, "r", encoding="utf-8") as file_obj:
         return json.load(file_obj)
+
+
+def launch_training_process(
+    start_command: str,
+    *,
+    host_training_dir: str,
+    docker_container_name: str,
+    docker_working_dir: str,
+    log: Optional[logging.Logger] = None,
+) -> subprocess.Popen[bytes]:
+    """Launch a training process inside a Docker container."""
+
+    logger = log or logging.getLogger(__name__)
+    docker_command = (
+        f"cd {host_training_dir} && "
+        f"docker exec -i {docker_container_name} "
+        "env LANG=C.UTF-8 bash -lc "
+        f"\"cd {docker_working_dir} && {start_command}\""
+    )
+    logger.info("Launching training command: %s", docker_command)
+    try:
+        process = subprocess.Popen(  # noqa: S603, S607 - intentional command execution
+            ["bash", "-lc", docker_command],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except FileNotFoundError as exc:  # pragma: no cover - defensive guard
+        raise RuntimeError("无法执行训练命令，请检查服务器环境配置。") from exc
+    return process
+
+
+def run_container_command(
+    container_name: str,
+    command: str,
+    *,
+    log: Optional[logging.Logger] = None,
+) -> None:
+    """Execute a shell command inside a Docker container."""
+
+    logger = log or logging.getLogger(__name__)
+    docker_command = [
+        "docker",
+        "exec",
+        "-i",
+        container_name,
+        "bash",
+        "-lc",
+        command,
+    ]
+    result = subprocess.run(  # noqa: S603, S607 - intentional command execution
+        docker_command,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        logger.error(
+            "Failed to run command in container %s: %s", container_name, stderr
+        )
+        raise RuntimeError(
+            f"无法在容器 {container_name} 中执行命令：{stderr or '未知错误'}"
+        )
 
 
 # Ensure directories exist when the module is imported.
