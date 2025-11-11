@@ -3,8 +3,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timezone
-from datetime import datetime
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence
 from uuid import uuid4
 
 from sqlalchemy import (
@@ -29,6 +28,10 @@ from .models import (
     LogEntry,
     LogListResponse,
     LogQueryParams,
+    OperationAction,
+    OperationLog,
+    OperationStatus,
+    OperationTargetType,
     Project,
     ProjectCreate,
     ProjectDetail,
@@ -106,6 +109,20 @@ artifacts_table = Table(
 )
 
 
+operation_logs_table = Table(
+    "operation_logs",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("action", String, nullable=False),
+    Column("target_type", String, nullable=False),
+    Column("target_id", String, nullable=True),
+    Column("status", String, nullable=False),
+    Column("detail", Text, nullable=True),
+    Column("extra", Text, nullable=False, default="{}"),
+    Column("created_at", DateTime, nullable=False),
+)
+
+
 def _serialize_list(values: Sequence[str]) -> str:
     """将字符串序列转换为 JSON，便于在文本字段中持久化。"""
 
@@ -132,6 +149,25 @@ def _deserialize_metrics(raw: Optional[str]) -> Dict[str, float]:
     if not raw:
         return {}
     return json.loads(raw)
+
+
+def _serialize_extra(extra: Optional[Dict[str, Any]]) -> str:
+    """序列化额外元数据，确保持久化时为 JSON 字符串。"""
+
+    if not extra:
+        return "{}"
+    return json.dumps(extra)
+
+
+def _deserialize_extra(raw: Optional[str]) -> Dict[str, Any]:
+    """反序列化额外元数据，兼容空值返回空字典。"""
+
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:  # pragma: no cover - 容错逻辑
+        return {}
 
 
 def _ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
@@ -444,6 +480,55 @@ class DatabaseStorage:
             return self._row_to_artifact(row)
 
     # ------------------------------------------------------------------
+    # Operation logs
+    # ------------------------------------------------------------------
+    def record_operation(
+        self,
+        action: OperationAction,
+        target_type: OperationTargetType,
+        target_id: Optional[str],
+        status: OperationStatus,
+        detail: Optional[str] = None,
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> OperationLog:
+        """写入一条接口操作日志并返回记录。"""
+
+        log_id = str(uuid4())
+        timestamp = datetime.now(timezone.utc)
+        with self._engine.begin() as conn:
+            conn.execute(
+                operation_logs_table.insert().values(
+                    id=log_id,
+                    action=action.value,
+                    target_type=target_type.value,
+                    target_id=target_id,
+                    status=status.value,
+                    detail=detail,
+                    extra=_serialize_extra(extra),
+                    created_at=timestamp,
+                )
+            )
+        return OperationLog(
+            id=log_id,
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            status=status,
+            detail=detail,
+            created_at=_ensure_utc(timestamp),
+            extra=extra or {},
+        )
+
+    def list_operations(self) -> List[OperationLog]:
+        """列出全部操作日志，按时间倒序排列。"""
+
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                select(operation_logs_table).order_by(operation_logs_table.c.created_at.desc())
+            ).all()
+            return [self._row_to_operation_log(row) for row in rows]
+
+    # ------------------------------------------------------------------
     # Helper builders
     # ------------------------------------------------------------------
     def _row_to_project(self, row: Row) -> Project:
@@ -539,6 +624,20 @@ class DatabaseStorage:
             path=row.path,
             created_at=_ensure_utc(row.created_at),
             tags=_deserialize_list(row.tags),
+        )
+
+    def _row_to_operation_log(self, row: Row) -> OperationLog:
+        """将数据库操作日志行转换为结构化模型。"""
+
+        return OperationLog(
+            id=row.id,
+            action=OperationAction(row.action),
+            target_type=OperationTargetType(row.target_type),
+            target_id=row.target_id,
+            status=OperationStatus(row.status),
+            detail=row.detail,
+            created_at=_ensure_utc(row.created_at),
+            extra=_deserialize_extra(row.extra),
         )
 
     def _insert_initial_logs(self, conn: Connection, run_id: str, timestamp: datetime) -> None:
