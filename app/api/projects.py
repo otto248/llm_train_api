@@ -25,10 +25,14 @@ logger = logging.getLogger(__name__)
 
 
 def _build_start_command(project: ProjectDetail) -> str:
+    """生成启动训练脚本所需的命令行。"""
+
     return f"bash run_train_full_sft.sh {project.training_yaml_name}"
 
 
 def _resolve_project_asset(relative_path: str) -> PathlibPath:
+    """解析项目资源路径并确保其位于允许的目录下。"""
+
     candidate = (HOST_TRAINING_PATH / relative_path).resolve()
     try:
         candidate.relative_to(HOST_TRAINING_PATH)
@@ -43,6 +47,8 @@ def _resolve_project_asset(relative_path: str) -> PathlibPath:
 
 
 def _ensure_project_assets_available(project: ProjectDetail) -> None:
+    """确认训练所需的数据集与配置文件均已存在。"""
+
     missing: List[str] = []
     dataset_path = _resolve_project_asset(project.dataset_name)
     if not dataset_path.exists():

@@ -25,6 +25,7 @@ router = APIRouter(prefix="/v1/datasets", tags=["datasets"])
 
 @router.post("")
 def create_dataset(req: DatasetCreateRequest) -> Dict[str, str]:
+    """创建新的数据集元数据并记录操作日志。"""
     dataset_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "") + "Z"
     record = DatasetRecord(
@@ -58,6 +59,7 @@ def create_dataset(req: DatasetCreateRequest) -> Dict[str, str]:
 
 @router.get("/{dataset_id}")
 def get_dataset(dataset_id: str) -> Dict[str, Any]:
+    """读取指定数据集的详细信息，如果不存在则返回 404。"""
     try:
         record = load_dataset_record(dataset_id)
     except FileNotFoundError as exc:
@@ -70,6 +72,7 @@ def get_dataset(dataset_id: str) -> Dict[str, Any]:
 
 @router.put("/{dataset_id}/files")
 async def upload_small_file(dataset_id: str, file: UploadFile = File(...)) -> Dict[str, Any]:
+    """上传小文件到数据集并更新文件记录与上传日志。"""
     try:
         record = load_dataset_record(dataset_id)
     except FileNotFoundError as exc:

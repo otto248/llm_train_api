@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 @router.delete("/{upload_id}")
 def abort_upload(upload_id: str) -> Dict[str, str]:
+    """终止尚未完成的上传会话并清理相关文件。"""
+
     upload_meta_path = UPLOADS_DIR / f"{upload_id}.json"
     if not upload_meta_path.exists():
         raise HTTPException(status_code=404, detail="Upload session not found")

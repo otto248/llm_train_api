@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 @router.put("")
 async def upload_train_config(file: UploadFile = File(...)) -> Dict[str, Any]:
+    """上传训练配置文件并记录元数据。"""
+
     if not (file.filename.endswith(".yaml") or file.filename.endswith(".yml")):
         raise HTTPException(status_code=400, detail="Only .yaml or .yml files are allowed")
     content = await file.read()
@@ -55,6 +57,8 @@ async def upload_train_config(file: UploadFile = File(...)) -> Dict[str, Any]:
 
 @router.get("")
 def get_train_config() -> Dict[str, Any]:
+    """读取训练配置的元数据，不存在时返回 404。"""
+
     try:
         return load_train_config_metadata()
     except FileNotFoundError as exc:
@@ -63,6 +67,8 @@ def get_train_config() -> Dict[str, Any]:
 
 @router.delete("")
 def delete_train_config() -> Dict[str, str]:
+    """删除训练配置文件及元数据，并记录操作结果。"""
+
     config_path = train_config_path()
     file_was_present = config_path.exists()
     removal_error: OSError | None = None

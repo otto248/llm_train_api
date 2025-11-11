@@ -13,6 +13,8 @@ router = APIRouter(tags=["health"])
 
 @router.get("/healthz")
 def health() -> Dict[str, str]:
+    """对外暴露的健康检查接口。"""
+
     return {"status": "ok"}
 
 

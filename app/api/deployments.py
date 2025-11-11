@@ -274,6 +274,8 @@ def create_deployment(
         port_number: int,
         health_path: str,
     ) -> None:
+        """在后台轮询部署健康状态并更新存储。"""
+
         time.sleep(1.0)
         try:
             os.kill(process_id, 0)

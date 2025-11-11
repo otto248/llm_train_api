@@ -16,6 +16,8 @@ class DeidStrategy:
     def deidentify_texts(
         self, texts: List[str], options: Dict[str, Any]
     ) -> Tuple[List[str], List[Dict[str, Any]]]:
+        """根据给定策略对文本列表执行去标识化。"""
+
         raise NotImplementedError
 
 
@@ -41,6 +43,8 @@ class RandomDigitReplacement(DeidStrategy):
     def deidentify_texts(
         self, texts: List[str], options: Dict[str, Any]
     ) -> Tuple[List[str], List[Dict[str, Any]]]:
+        """按输入顺序替换文本中的数字并返回映射。"""
+
         seed = options.get("seed")
         rng = random.Random(seed)
         mapping: Dict[str, str] = {}

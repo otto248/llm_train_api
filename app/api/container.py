@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def _create_file_in_container(filename: str) -> str:
+    """Validate the desired filename and create the file inside the container."""
     sanitized = PathlibPath(filename).name
     if sanitized != filename:
         raise HTTPException(status_code=400, detail="文件名非法，仅允许提供文件名。")
