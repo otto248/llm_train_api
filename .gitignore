@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
+.env
+training.db
 app.db
+.alembic/
