@@ -1,186 +1,162 @@
 # LLM 训练管理 API
 
-一个基于 FastAPI 的轻量级服务，用于集中管理大模型训练项目、数据集上传、训练配置文件以及模型部署流程。服务将业务按功能域拆分，配合清晰的目录结构，便于多人协作与扩展。
+一个基于 FastAPI 的轻量级服务，用于集中式管理大语言模型训练项目、数据集、训练配置与部署生命周期。平台将常用管理能力抽象为 RESTful 接口，方便自建训练编排系统或前端面板快速接入。
 
-## 项目结构
+## 功能概览
+- **项目与运行管理**：创建项目、触发训练运行、追踪状态、指标与产出工件。
+- **数据集生命周期**：登记数据集元信息、上传小文件样本、查询上传进度。
+- **训练配置管理**：上传/删除 YAML 训练配置文件，配合项目引用。
+- **部署协作**：为推理服务的启停与健康检查预留 API，便于一体化运维。
+- **日志留痕**：所有关键操作均通过 `src/storage` 记录，方便审计与排障。
+
+## 目录结构
 ```
-fastapi-app/
-├─ app/
-│  ├─ __init__.py          # 暴露 FastAPI app 与工厂方法
-│  ├─ main.py              # 创建 FastAPI 实例并自动注册路由
-│  ├─ config.py            # 全局配置（目录、策略等常量）
-│  ├─ deps.py              # FastAPI 依赖定义（数据库、服务）
-│  └─ logging.py           # 日志初始化
-│
+llm_train_api/
+├─ app/                     # FastAPI 应用工厂、依赖与运行时配置
+│  ├─ api/                  # 顶层路由注册（聚合 src/features 下的模块）
+│  ├─ config.py             # 平台级常量、路径、配额
+│  ├─ deps.py               # 依赖注入（数据库/存储句柄）
+│  └─ logging.py            # 日志初始化
 ├─ src/
-│  ├─ api/                 # 各功能域对外暴露的路由
-│  │  ├─ __init__.py       # 统一注册所有路由模块
-│  │  ├─ datasets.py       # 数据集与文件上传接口
-│  │  ├─ deployments.py    # 模型部署生命周期管理
-│  │  ├─ deidentify.py     # 文本脱敏接口
-│  │  ├─ health.py         # 健康检查
-│  │  ├─ projects.py       # 训练项目与运行管理
-│  │  └─ train_configs.py  # 训练配置上传与清理
-│  │
-│  ├─ schemas/             # Pydantic 数据结构
-│  │  └─ __init__.py
-│  │
-│  ├─ db/                  # SQLAlchemy 元数据与表定义
-│  │  ├─ __init__.py
-│  │  ├─ base.py
-│  │  ├─ models.py
-│  │  └─ session.py
-│  │
-│  ├─ services/            # 业务服务/仓储实现
-│  │  ├─ __init__.py
-│  │  ├─ data_store.py
-│  │  └─ deidentify_service.py
-│  │
-│  └─ utils/               # 通用工具
-│     ├─ __init__.py
-│     └─ storage.py        # 本地文件与容器命令辅助
-│
-├─ main.py                 # 兼容入口，导出 app
+│  ├─ features/             # 业务域路由实现（datasets、projects、deployments 等）
+│  ├─ models/               # Pydantic 请求/响应模型
+│  ├─ storage/              # SQLite/JSON 文件存储实现
+│  ├─ utils/                # 文件系统与容器执行辅助
+│  └─ ...
+├─ tests/                   # Pytest 覆盖核心 API 行为
+├─ main.py                  # 兼容入口：`uvicorn main:app`
 ├─ requirements.txt
 └─ README.md
 ```
 
-## 核心能力
-- **项目管理**：`src/api/projects.py` 暴露项目创建、列表与运行管理接口；`src/services/data_store.py` 通过 SQLAlchemy 维护项目、运行、日志与工件数据。
-- **数据集与配置上传**：`src/api/datasets.py` 管理数据集元数据、小文件上传；`src/api/train_configs.py` 负责训练配置 YAML 的上传、查询和删除。
-- **部署管理**：`src/api/deployments.py` 以进程方式管理 vLLM 模型服务，支持查询、健康检查以及强制下线。
-- **文本脱敏**：`src/api/deidentify.py` 与 `src/services/deidentify_service.py` 提供策略化的脱敏实现，可根据策略 ID 扩展。
-- **健康检查**：`src/api/health.py` 提供对外与内部的健康探针，兼容部署管理模块使用的 `_internal/health` 接口。
-
 ## 快速开始
 1. 安装依赖：`pip install -r requirements.txt`
 2. 启动服务：`uvicorn main:app --reload`
-3. 使用 `http://localhost:8000/docs` 查看交互式文档。
+3. 打开 `http://localhost:8000/docs` 使用交互式 OpenAPI 文档。
 
-## 主要接口示例
+> **提示**：训练运行会调用 `run_train_full_sft.sh`，并假设训练数据与配置位于 `app.config.HOST_TRAINING_PATH` 中。部署时请根据实际路径与脚本调整 `app/config.py`。
 
-## 快速开始
-1. 安装依赖：`pip install -r requirements.txt`
-2. 启动服务：`uvicorn main:app --reload`
-3. 使用 `http://localhost:8000/docs` 查看交互式文档。
+## 常用 API 速览
+| 资源 | 方法 & 路径 | 说明 |
+|------|-------------|------|
+| 数据集 | `POST /v1/datasets` | 创建数据集元数据记录 |
+| 数据集文件 | `PUT /v1/datasets/{dataset_id}/files` | 上传小文件样本（≤ `MAX_SMALL_FILE_BYTES`） |
+| 训练配置 | `PUT /v1/train-config` | 上传训练 YAML（≤ `MAX_YAML_BYTES`） |
+| 项目 | `POST /projects` | 注册训练项目并关联数据集/配置 |
+| 运行 | `POST /projects/{id or name}/runs` | 校验资源并触发一次训练 |
+| 工件 | `GET /projects/{id}/runs/{run_id}/artifacts` | 查询运行产出的文件记录 |
+| 日志 | `GET /projects/{id}/runs/{run_id}/logs` | 分页获取运行日志 |
 
-## 主要接口示例
-## 项目结构
-```
-fastapi-app/
-├─ app/
-│  ├─ __init__.py              # 暴露 app/create_app
-│  ├─ config.py                # 平台常量与限制配置
-│  ├─ deps.py                  # FastAPI 依赖注入
-│  ├─ logging.py               # 日志初始化入口
-│  └─ main.py                  # 应用工厂与路由装配
-├─ src/
-│  ├─ __init__.py
-│  ├─ features/
-│  │  ├─ datasets/
-│  │  │  ├─ __init__.py
-│  │  │  └─ api.py             # 数据集与上传接口
-│  │  ├─ deid/
-│  │  │  ├─ __init__.py
-│  │  │  ├─ api.py             # 脱敏接口
-│  │  │  └─ services.py        # 脱敏策略实现
-│  │  ├─ deployments/
-│  │  │  ├─ __init__.py
-│  │  │  └─ api.py             # 模型部署管理
-│  │  ├─ health/
-│  │  │  ├─ __init__.py
-│  │  │  └─ api.py             # 健康检查
-│  │  ├─ projects/
-│  │  │  ├─ __init__.py
-│  │  │  └─ api.py             # 项目与运行管理
-│  │  └─ train_configs/
-│  │     ├─ __init__.py
-│  │     └─ api.py             # 训练配置上传
-│  ├─ models/
-│  │  └─ __init__.py           # 共享 Pydantic 模型
-│  ├─ storage/
-│  │  └─ __init__.py           # SQLAlchemy 存储实现
-│  └─ utils/
-│     └─ filesystem.py         # 本地文件系统工具
-├─ main.py                     # 顶层可执行入口
-└─ requirements.txt
-```
+## 训练任务类型与数据规范
+平台使用统一的数据集管理与训练配置机制，不同训练范式通过约定输入/输出格式来区分。以下规范可直接作为上传数据的模版：
 
-## 功能概览
-- **项目管理**：登记训练项目的基本信息（名称、负责人、数据集、训练配置等），并持久化保存。项目默认处于 `active` 状态，可扩展为归档等流程。【F:src/models/__init__.py†L12-L51】【F:src/storage/__init__.py†L67-L123】
-- **运行管理**：为任意项目创建新的训练运行，记录启动命令、运行状态、进度、指标及关联系统日志/工件。【F:src/features/projects/api.py†L83-L147】【F:src/storage/__init__.py†L124-L326】
-- **日志与工件**：运行创建时自动补充示例日志与工件，便于前端或外部系统演示展示，也支持追加标签、分页查询等存储能力。【F:src/storage/__init__.py†L327-L567】
+### 1. Supervised Fine-Tuning (SFT)
+- **数据文件格式**：推荐 `JSONL`，每行一个对话样本。
+  ```jsonl
+  {"conversation_id": "demo-001", "messages": [{"role": "user", "content": "指令"}, {"role": "assistant", "content": "回答"}], "task_tags": ["qa"], "metadata": {"language": "zh"}}
+  {"conversation_id": "demo-002", "messages": [{"role": "user", "content": "请总结"}, {"role": "assistant", "content": "总结内容"}]}
+  ```
+  - `messages` 按顺序排列，至少包含用户与助手两轮。
+  - 可选字段：`system_prompt`、`input_template`、`metadata`。
+- **训练配置关键字段（YAML）**：
+  ```yaml
+  task_type: sft
+  model_name: qwen-7b
+  dataset: datasets/sft_dataset.jsonl
+  max_seq_length: 2048
+  per_device_train_batch_size: 4
+  learning_rate: 2e-5
+  num_train_epochs: 3
+  ```
+  - `task_type` 必须为 `sft`，用于运行脚本识别。
+  - `dataset` 字段需与项目登记的 `dataset_name` 对应。
+- **训练输出**：
+  - 日志指标：`train/loss`、`eval/loss`、`eval/rougeL` 等 JSON 格式指标追加至 `Run.metrics`。
+  - 工件：完整模型权重（如 `model_final/` 目录）与 tokenizer 配置包。
 
-## API 端点
+### 2. 强化学习（RL，包括 RLHF）
+- **数据文件格式**：`JSONL`，支持奖励对齐或偏好对比两种样式。
+  ```jsonl
+  {"prompt": "请写一首短诗", "chosen": "春风拂面...", "rejected": "我不知道", "metadata": {"source": "beta-feedback"}}
+  {"prompt": "翻译：Hello", "responses": [{"content": "你好", "score": 0.9}, {"content": "您好", "score": 0.7}]}
+  ```
+  - 若提供 `chosen`/`rejected` 字段则默认用于偏好学习；若提供 `responses` 列表则读取最高 `score` 作为正样本。
+- **训练配置关键字段**：
+  ```yaml
+  task_type: rl
+  algorithm: ppo
+  policy_model: qwen-7b-sft
+  reward_model: qwen-7b-rm
+  dataset: datasets/rl_preference.jsonl
+  rollout_batch_size: 16
+  update_epochs: 4
+  kl_target: 0.1
+  ```
+  - `policy_model` 指向已完成 SFT 的权重。
+  - `reward_model` 为独立推理服务或本地检查点路径。
+- **训练输出**：
+  - 日志指标：`reward/mean`, `kl_divergence`, `episode_length`。
+  - 工件：强化学习后的策略模型目录，以及可选的奖励模型 checkpoint（如有微调）。
 
-以下内容按接口列出了请求参数、响应结构以及便于调试的 `curl` 示例。所有端点均返回 Pydantic 模型封装的结构化数据，详细字段定义可参考 `src/models/__init__.py`。【F:src/models/__init__.py†L12-L215】
+### 3. LoRA 微调
+- **数据文件格式**：复用 SFT 的对话 JSONL，支持额外 LoRA 标签。
+  ```jsonl
+  {"conversation_id": "lora-001", "messages": [{"role": "user", "content": "写一封感谢信"}, {"role": "assistant", "content": "亲爱的团队..."}], "target_modules": ["q_proj", "v_proj"], "rank": 8}
+  ```
+  - `target_modules` 与 `rank` 可覆盖 YAML 中的默认值，用于样本级别实验。
+- **训练配置关键字段**：
+  ```yaml
+  task_type: lora
+  base_model: llama2-7b
+  dataset: datasets/lora_demo.jsonl
+  lora_r: 8
+  lora_alpha: 16
+  lora_dropout: 0.05
+  train_batch_size: 64
+  gradient_accumulation_steps: 4
+  use_8bit: true
+  ```
+  - `base_model` 为原始全量模型；LoRA 权重会在此基础上保存增量。
+  - 可选字段：`peft_target_modules`、`bnb_4bit_quant_type` 等。
+- **训练输出**：
+  - 工件：LoRA 适配器（如 `adapter_config.json`、`adapter_model.safetensors`）。
+  - 日志：训练/验证损失、权重规范化统计。
 
-### 创建项目
-- **方法/路径**：`POST /projects`
-- **请求体**：`ProjectCreate`
-- **响应体**：`ProjectDetail`
+### 4. 大规模预训练（Pretraining）
+- **数据文件格式**：推荐 `JSONL` 或 `.txt`。若使用 JSONL，需提供 `text` 字段。
+  ```jsonl
+  {"doc_id": "pt-0001", "text": "大模型预训练语料第一段...", "metadata": {"domain": "finance"}}
+  {"doc_id": "pt-0002", "text": "第二段语料..."}
+  ```
+  - 文本需完成清洗（去除控制字符、统一编码为 UTF-8）。
+  - 可追加 `metadata` 描述来源与保留策略，用于采样器过滤。
+- **训练配置关键字段**：
+  ```yaml
+  task_type: pretrain
+  model_name: llama2-7b
+  dataset: datasets/pretrain_corpus.jsonl
+  sequence_length: 4096
+  global_batch_size: 1024
+  learning_rate: 3e-4
+  warmup_ratio: 0.01
+  tokenizer: configs/tokenizer.model
+  ```
+  - `sequence_length` 决定拼接时的最大 token 长度。
+  - `global_batch_size` = `per_device_batch_size × 数据并行度`。
+- **训练输出**：
+  - 工件：分阶段 checkpoint（如 `step-10000/`），词表或 tokenizer 同步副本。
+  - 日志：吞吐量（tokens/sec）、loss 曲线、梯度裁剪统计。
 
+### 上传与引用流程小结
+1. 通过 `/v1/datasets` 创建数据集记录并获取 `dataset_id`。
+2. 使用 `/v1/datasets/{dataset_id}/files` 上传规范化数据文件。
+3. 通过 `/v1/train-config` 上传包含 `task_type` 与路径字段的 YAML。
+4. 调用 `/projects` 注册项目，字段 `dataset_name` 与 `training_yaml_name` 分别对应已上传文件的相对路径。
+5. 调用 `/projects/{id}/runs` 触发训练，系统会自动校验文件存在并执行脚本。
+
+## 测试
 ```bash
-curl -X POST "http://localhost:8000/projects" \
-  -H "Content-Type: application/json" \
-  -d '{
-        "name": "demo-project",
-        "description": "微调示例",
-        "owner": "alice",
-        "tags": ["demo"],
-        "dataset_name": "datasets/sample.jsonl",
-        "training_yaml_name": "configs/train.yaml"
-      }'
+pytest
 ```
 
-### 上传数据集文件
-- **方法/路径**：`PUT /v1/datasets/{dataset_id}/files`
-- **请求体**：`multipart/form-data`
-- **响应体**：上传元数据（包含 `upload_id`、大小等信息）
-
-```bash
-curl -X PUT "http://localhost:8000/v1/datasets/{dataset_id}/files" \
-  -F "file=@sample.jsonl"
-```
-
-### 上传训练配置
-- **方法/路径**：`PUT /v1/train-config`
-- **请求体**：YAML 文件
-- **响应体**：上传的元数据
-
-```bash
-curl -X PUT "http://localhost:8000/v1/train-config" \
-  -F "file=@train.yaml"
-```
-
-### 创建部署
-- **方法/路径**：`POST /deployments`
-- **请求体**：模型路径、可选标签、额外参数等
-- **响应体**：`DeploymentInfo`
-
-```bash
-curl -X POST "http://localhost:8000/deployments" \
-  -H "Content-Type: application/json" \
-  -d '{
-        "model_path": "/models/qwen",
-        "tags": ["demo"],
-        "preferred_gpu": 0
-      }'
-```
-
-### 文本脱敏
-- **方法/路径**：`POST /v1/deidentify:test`
-- **请求体**：`DeidRequest`
-- **响应体**：`DeidResponse`
-
-```bash
-curl -X POST "http://localhost:8000/v1/deidentify:test" \
-  -H "Content-Type: application/json" \
-  -d '{
-        "policy_id": "default",
-        "text": ["客户手机号 13812345678"],
-        "options": {"return_mapping": true, "seed": 42}
-      }'
-```
-
-更多字段与返回格式请参考 `src/schemas/__init__.py` 中的 Pydantic 定义。
+更多实现细节请阅读 `src/features` 下各模块与 `tests/` 中的用例。
